@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Union
 import sentencepiece as spm
 from sentencepiece import SentencePieceProcessor
 
@@ -9,12 +9,14 @@ class Tokenizer:
         self,
         data_dir: str,
         vocab_size: int,
-        force_retrain: bool = False
+        force_retrain: bool = False,
+        add_special_tokens: Union[List[str], None] = None
     ) -> None:
         self.data_dir = data_dir
         self.tokenizer_dir = "easylm/.cache"
         self.model_prefix = "VOCAB"
         self.vocab_size = vocab_size
+        self.add_special_tokens = add_special_tokens
         self.model_path = os.path.join(self.tokenizer_dir, f"{self.model_prefix}.model")
 
         # Ensure the model directory exists.
@@ -33,7 +35,8 @@ class Tokenizer:
         spm.SentencePieceTrainer.Train(
             input=self.data_dir,
             model_prefix=os.path.join(self.tokenizer_dir, self.model_prefix),
-            vocab_size=self.vocab_size
+            vocab_size=self.vocab_size,
+            user_defined_symbols=self.add_special_tokens
         )
 
     def encode(self, text: str) -> List[int]:
