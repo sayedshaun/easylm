@@ -15,8 +15,8 @@ setup(
     install_requires=[
         "numpy==2.2.2",
         "sentencepiece==0.2.0",
-        "torch==2.4.1",
-        "torchvision==0.19.1",
+        "torch",
+        "torchvision",
         "pillow==11.1.0"
     ],
     long_description=long_description,
