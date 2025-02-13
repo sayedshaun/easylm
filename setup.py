@@ -13,11 +13,13 @@ setup(
     packages=find_packages(),
     description=DESCRIPTION,
     install_requires=[
-        "sentencepiece",
-        "torch"
-        "numpy"
+        "numpy==2.2.2",
+        "sentencepiece==0.2.0",
+        "torch==2.4.1",
+        "torchvision==0.19.1",
+        "pillow==11.1.0"
     ],
     long_description=long_description,
     long_description_content_type='text/markdown',
-    python_requires=">=3.8",
+    python_requires=">=3.10",
 )
