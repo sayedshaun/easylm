@@ -95,6 +95,7 @@ from tqdm import tqdm
 from typing import Union
 import torch.nn.functional as F
 from torch.amp import autocast, GradScaler
+from torch.utils.data import DataLoader, Dataset
 
 class Trainer:
     def __init__(self, config: object) -> None:
@@ -102,9 +103,9 @@ class Trainer:
         self.model = config.model
         self.epochs = config.epochs
         self.device = config.device
-        self.train_dataloader = config.train_dataloader
-        self.val_dataloader = config.val_dataloader
-        self.test_dataloader = config.test_dataloader
+        self.train_data = config.train_data
+        self.val_data = config.val_data
+        self.test_data = config.test_data
         self.gradient_accumulation_steps = config.gradient_accumulation_steps
         self.gradient_clipping = config.gradient_clipping
         self.precision = config.precision
@@ -135,7 +136,7 @@ class Trainer:
         global_step = 0
         # Loop over epochs
         for epoch in range(self.epochs):
-            for i, batch in enumerate(tqdm(self.train_dataloader, desc=f"Training Epoch {epoch+1}")):
+            for i, batch in enumerate(tqdm(self.train_data, desc=f"Training Epoch {epoch+1}")):
                 # Use autocast only if AMP is enabled
                 with autocast(device_type=self.device, dtype=self.precision, enabled=self.enable_amp):
                     loss = self.train_step(self.model, batch)
@@ -156,7 +157,7 @@ class Trainer:
                         self.logs["train_loss"].append(loss.item())
                         self.logs["global_step"] = global_step
                         self.logs["epoch"] = epoch
-                        if self.val_dataloader is not None:
+                        if self.val_data is not None:
                             self.evaluate()
                             print(
                                 f"Epoch: {self.logs['epoch']} | Global Step: {self.logs['global_step']} | "
@@ -187,11 +188,18 @@ class Trainer:
     def evaluate(self):
         self.model.eval()
         with torch.no_grad():
-            for batch in tqdm(self.val_dataloader, desc="Validating"):
+            for batch in tqdm(self.val_data, desc="Validating"):
                 with autocast(device_type=self.device, dtype=self.precision, enabled=self.enable_amp):
                     loss = self.validation_step(self.model, batch)
                     self.logs["val_loss"].append(loss.item())
         self.model.train()
+
+    
+    def dataloader(self, dataset: Union[Dataset, DataLoader]) -> DataLoader:
+        if isinstance(dataset, Dataset):
+            return DataLoader(dataset, batch_size=self.batch_size)
+        return dataset
+
 
 
 __all__ = ["Trainer"]
