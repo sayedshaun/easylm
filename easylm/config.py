@@ -1,7 +1,7 @@
 import torch
 from dataclasses import dataclass
 from typing import Union
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 
 @dataclass
@@ -53,9 +53,9 @@ class TrainingConfig:
     epochs: Union[int, None] = None
     batch_size: Union[int, None] = None
     learning_rate: Union[float, None] = None
-    train_dataloader: Union[DataLoader, None] = None
-    val_dataloader: Union[DataLoader, None] = None
-    test_dataloader: Union[DataLoader, None] = None
+    train_data: Union[DataLoader, Dataset, None] = None
+    val_data: Union[DataLoader, Dataset, None] = None
+    test_data: Union[DataLoader, Dataset, None] = None
     device: Union[str, None] = None
     gradient_accumulation_steps: Union[int, None] = None
     gradient_clipping: Union[float, None] = None
