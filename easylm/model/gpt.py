@@ -1,12 +1,13 @@
 from typing import Union
 import torch
 from torch import nn
+from easylm.config import GPTConfig
 from easylm.data import Tokenizer
 from easylm.nn import Linear, TransformerDecoderBlock, PositionalEmbeddings
 
 
 class GPTModel(nn.Module):
-    def __init__(self, config: object) -> None: 
+    def __init__(self, config: GPTConfig) -> None: 
         super(GPTModel, self).__init__()
         self.embedding = PositionalEmbeddings(
             config.vocab_size, 
@@ -43,7 +44,6 @@ class GPTModel(nn.Module):
 
     @torch.no_grad()
     def generate(self, start:str, max_length:int=50, temperature:float=0.5, device:str="cpu")->str:
-        start = Tokenizer.encode(start)
         outputs = start
         for _ in range(max_length):
             long = torch.LongTensor(outputs).unsqueeze(0).to(device)

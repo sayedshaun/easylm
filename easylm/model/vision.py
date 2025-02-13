@@ -1,4 +1,5 @@
 import torch
+from easylm.config import VITConfig
 from easylm.nn import (
     Dropout, 
     LayerNormalization, 
@@ -9,7 +10,7 @@ from easylm.nn import (
 
 
 class VisionTransformer(torch.nn.Module):
-    def __init__(self, config: object) -> None:
+    def __init__(self, config: VITConfig) -> None:
         super(VisionTransformer, self).__init__()
         self.patch_embed = PatchEmbedding(
             img_size=config.image_size,
