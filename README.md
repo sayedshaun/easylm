@@ -8,6 +8,11 @@ Welcome to EasyLM, a Python package for training Language Models. EasyLM provide
 pip install easylm
 ```
 
+For development previews, you can install the development version from GitHub:
+
+```bash
+pip install git+https://github.com/sayedshaun/easylm.git
+```
 
 ## Usage
 
