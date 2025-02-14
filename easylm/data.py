@@ -9,6 +9,9 @@ import torchvision
 from easylm.tokenizer import Tokenizer
 from typing import List, Optional, Tuple, Generator, Union
 
+random.seed(42)
+torch.manual_seed(42)
+
 
 class NextWordPredDataset(torch.utils.data.Dataset):  
     """
@@ -50,48 +53,57 @@ class NextWordPredDataset(torch.utils.data.Dataset):
         return input_ids.long(), target_ids.long()
 
 
-class MaskedLMDataset(torch.utils.data.Dataset):  
-    def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15, mask_token_id: int = 103) -> None:
+class MaskedLMDataset(torch.utils.data.Dataset):
+    def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
         """
-        mask_token_id: the token ID corresponding to the [MASK] token.
+        Args:
+            file_path (str): path to the text file.
+            tokenizer (Tokenizer): tokenizer to encode and decode tokens.
+            max_seq_len (int): total sequence length (including special tokens).
+            mask_prob (float): probability of masking a token.
         """
-        self.n_ctx = max_seq_len  # Context window size
+        self.file_path = file_path
+        self.max_seq_len = max_seq_len
         self.tokenizer = tokenizer
         self.mask_prob = mask_prob
-        self.mask_token_id = mask_token_id
         
-        # Read and tokenize the dataset
-        with open(file_path, "r", encoding="utf-8") as file:
-            self.text = file.read()
+        self.mask_token_id = tokenizer.encode("[MASK]")[1]
+        self.cls_token_id = tokenizer.encode("[CLS]")[1]
+        self.sep_token_id = tokenizer.encode("[SEP]")[1]
+        self.pad_token_id = tokenizer.encode("[PAD]")[1]
 
-        # Convert text to token IDs
-        self.all_ids = self.tokenizer.encode(self.text)
+        self.all_ids = self.data_generator()
+
+    def data_generator(self):    
+        with open(self.file_path, "r", encoding="utf-8") as file:
+            text = file.read()
+        all_ids = self.tokenizer.encode(text)
+        return all_ids
 
     def __len__(self):
-        return len(self.all_ids) - self.n_ctx
+        # We subtract 2 because we will add [CLS] and [SEP] tokens.
+        return len(self.all_ids) - (self.max_seq_len - 2)
 
     def __getitem__(self, idx):
-        """
-        Retrieve a training sample and apply random masking.
-        Returns:
-            input_ids: the input sequence with some tokens replaced by [MASK]
-            labels: the original tokens for masked positions, and -100 (ignore index) elsewhere
-        """
-        original_ids = self.all_ids[idx: idx + self.n_ctx]
-        input_ids = original_ids.copy()
-        labels = [-100] * len(original_ids)  # -100 will be ignored in loss computation
-        
-        # Randomly mask tokens with probability mask_prob
-        for i in range(len(original_ids)):
+        chunk = self.all_ids[idx: idx + self.max_seq_len - 2]
+        input_ids = [self.cls_token_id] + chunk + [self.sep_token_id]
+        target_ids = [-100] * len(input_ids)
+
+        for i in range(1, len(input_ids) - 1):
             if random.random() < self.mask_prob:
-                # Save original token as label
-                labels[i] = original_ids[i]
-                # Replace token with [MASK] token id
-                input_ids[i] = self.mask_token_id
-        
-        input_ids = torch.tensor(input_ids, dtype=torch.long)
-        labels = torch.tensor(labels, dtype=torch.long)
-        return input_ids, labels
+                target_ids[i] = input_ids[i]
+                rand = random.random()
+                if rand < 0.8:
+                    # 80% of the time, replace with [MASK]
+                    input_ids[i] = self.mask_token_id
+                elif rand < 0.9:
+                    # 10% of the time, replace with a random token from the vocabulary.
+                    input_ids[i] = random.choice(range(self.tokenizer.vocab_size))
+                else:
+                    # 10% of the time, leave the token unchanged.
+                    pass
+
+        return torch.tensor(input_ids), torch.tensor(target_ids)
 
 
 class ImageClassificationDataset(torch.utils.data.Dataset):
@@ -204,3 +216,5 @@ __all__ = [
     "MaskedLMDataset",
     "ImageClassificationDataset",
 ]
+
+
