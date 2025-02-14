@@ -1,8 +1,7 @@
 import math
-from typing import Tuple, Union
-import warnings
 import torch
 from torch import nn
+from typing import Tuple, Union
 import torch.nn.functional as F
 
 
@@ -11,24 +10,31 @@ class Linear(nn.Module):
         super(Linear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.is_bias = bias
-        self.w = nn.Parameter(torch.empty((out_features, in_features)))
-        if bias:
-            self.b = nn.Parameter(torch.empty(out_features))
-        self._initialize_weights()
+        self._bias = bias
+        
+        self.weights = nn.Parameter(torch.empty((out_features, in_features)))
+        
+        if self._bias:
+            self.bias = nn.Parameter(torch.empty(out_features))
+        else:
+            self.register_parameter('bias', None)
 
-    def _initialize_weights(self) -> None:
-        nn.init.xavier_normal_(self.w)
-        if self.is_bias:
-            nn.init.zeros_(self.b)
+        self.reset_parameters()  # Correct method name is usually plural
+
+    def reset_parameters(self):
+        # Example initialization using Kaiming Uniform
+        nn.init.kaiming_uniform_(self.weights, a=math.sqrt(5))
+        if self._bias:
+            # Calculate fan_in for proper bias initialization
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weights)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            nn.init.uniform_(self.bias, -bound, bound)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        self.w.to(X.device)
-        if self.is_bias:
-            self.b.to(X.device)
-            return X @ self.w.T + self.b
+        if self._bias:
+            return X @ self.weights.T + self.bias
         else:
-            return X @ self.w.T
+            return X @ self.weights.T
 
 
 class Softmax(nn.Module):
@@ -80,15 +86,14 @@ class Embedding(nn.Module):
         super(Embedding, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        self.weight = nn.Parameter(torch.empty((num_embeddings, embedding_dim)))
+        self.weight = nn.Parameter(torch.empty(num_embeddings, embedding_dim))
         self._initialize_weights()
 
-    def _initialize_weights(self) -> None:
-        nn.init.xavier_normal_(self.weight)
+    def _initialize_weights(self):
+        nn.init.normal_(self.weight, mean=0, std=1)
 
-    def forward(self, X: torch.Tensor) -> torch.Tensor: 
-        self.weight.to(X.device)
-        if X.type != torch.long:
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        if X.dtype != torch.long:
             X = X.long()
         return self.weight[X]
     
@@ -121,11 +126,11 @@ class TransformerMultiheadAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-        self.q_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.k_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.v_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.out_proj = Linear(hidden_size,hidden_size, bias=True)
-        self.softmax = Softmax(dim=-1)
+        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True)
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
         N, L, D = Q.shape
@@ -167,11 +172,11 @@ class FeedForward(torch.nn.Module):
     
     def net(self, X: torch.Tensor) -> torch.Tensor:
         net =  nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size),
-            ReLU(),
-            Dropout(self.dropout),
-            Linear(self.intermediate_size, self.hidden_size),
-            Dropout(self.dropout)
+            nn.Linear(self.hidden_size, self.intermediate_size),
+            nn.ReLU(),
+            nn.Dropout(self.dropout),
+            nn.Linear(self.intermediate_size, self.hidden_size),
+            nn.Dropout(self.dropout)
         )
         return net(X)
 
@@ -211,11 +216,10 @@ class RMSNormalization(nn.Module):
         super(RMSNormalization, self).__init__()
         self.gamma = nn.Parameter(torch.empty(dim))
         self.epsilon = epsilon
-        self.apply(self._init_weights)
+        self._init_weights()
 
-    def _init_weights(self, m) -> None:
-        if isinstance(m, RMSNormalization):
-            nn.init.ones_(self.gamma)
+    def _init_weights(self) -> None:
+        nn.init.ones_(self.gamma)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         rms = torch.sqrt(torch.mean(X**2, dim=-1, keepdim=True))
@@ -226,9 +230,9 @@ class RMSNormalization(nn.Module):
 class LlamaFeedForward(FeedForward):
     def net(self, X: torch.Tensor) -> torch.Tensor:
         net = nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size),
-            SiLU(),
-            Linear(self.intermediate_size, self.hidden_size)
+            nn.Linear(self.hidden_size, self.intermediate_size),
+            nn.SiLU(),
+            nn.Linear(self.intermediate_size, self.hidden_size)
         )
         return net(X)
 
@@ -240,10 +244,10 @@ class LlamaAttention(torch.nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert hidden_size % num_heads == 0, "Hidden size must be divisible by number of heads"
-        self.query_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.key_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.value_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.out_proj = Linear(hidden_size, hidden_size, bias=True)
+        self.query_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.key_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.value_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=True)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         N, S, H = X.shape # batch, seq_len, hidden_size
@@ -307,7 +311,7 @@ class LlamaBlock(nn.Module):
         self.norm1 = RMSNormalization(hidden_size, norm_epsilon)
         self.norm2 = RMSNormalization(hidden_size, norm_epsilon)
         self.norm3 = RMSNormalization(hidden_size, norm_epsilon)
-        self.dropout = Dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         norm_1 = self.norm1(X)
