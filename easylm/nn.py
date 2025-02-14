@@ -24,8 +24,8 @@ class Linear(nn.Module):
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         self.w.to(X.device)
-        self.b.to(X.device)
         if self.is_bias:
+            self.b.to(X.device)
             return X @ self.w.T + self.b
         else:
             return X @ self.w.T
