@@ -50,20 +50,20 @@ class VITConfig:
 @dataclass
 class TrainingConfig:
     model: Union[torch.nn.Module, None] = None
-    epochs: Union[int, None] = None
-    batch_size: Union[int, None] = None
-    learning_rate: Union[float, None] = None
+    epochs: Union[int, None] = 1
+    batch_size: Union[int, None] = 8
+    learning_rate: Union[float, None] = 1e-5
     train_data: Union[DataLoader, Dataset, None] = None
     val_data: Union[DataLoader, Dataset, None] = None
     test_data: Union[DataLoader, Dataset, None] = None
-    device: Union[str, None] = None
-    gradient_accumulation_steps: Union[int, None] = None
-    gradient_clipping: Union[float, None] = None
-    precision: Union[str, None] = None
-    seed: Union[int, None] = None
-    validation_steps: Union[int, None] = None
-    logging_steps: Union[int, None] = None
-    save_steps: Union[int, None] = None
+    device: Union[str, torch.device, None] = None
+    gradient_accumulation_steps: Union[int, None] = 1
+    gradient_clipping: Union[float, None] = 1
+    precision: Union[str, None] = torch.float16
+    seed: Union[int, None] = 42
+    validation_steps: Union[int, None] = 500
+    logging_steps: Union[int, None] = 500
+    save_steps: Union[int, None] = 500
     optimizer: Union[torch.optim.Optimizer, None] = None
 
 
