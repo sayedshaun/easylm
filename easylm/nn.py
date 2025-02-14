@@ -105,7 +105,7 @@ class PositionalEmbeddings(nn.Module):
 
     def forward(self, X:torch.Tensor)->torch.Tensor:
         w_embedding = self.word_encoding(X)
-        positions = torch.arange(X.shape[1]).unsqueeze(0)
+        positions = torch.arange(X.shape[1]).unsqueeze(0).to(X.device)
         p_embedding = self.position_encoding(positions)
         embeddings = w_embedding + p_embedding
         return self.relu(self.dropout(embeddings))
@@ -254,7 +254,8 @@ class LlamaAttention(torch.nn.Module):
             query=Q.transpose(1, 2),  # (batch, seq_len, num_heads, head_dim)
             key=K.transpose(1, 2),
             position_ids=position_ids,
-            dim=self.head_dim
+            dim=self.head_dim,
+            device=X.device
         )
         Q = q_rotated.transpose(1, 2)  # Back to (batch, num_heads, seq_len, head_dim)
         K = k_rotated.transpose(1, 2)
@@ -270,12 +271,12 @@ class LlamaAttention(torch.nn.Module):
     
     @staticmethod
     def apply_rope(query: torch.Tensor, key: torch.Tensor, 
-        position_ids: torch.Tensor, dim: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        position_ids: torch.Tensor, dim: int, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
         dtype = query.dtype
         # Split dimensions into two halves for rotation
         (q1, q2), (k1, k2) = query.chunk(2, dim=-1), key.chunk(2, dim=-1)
         # Compute theta values (corrected with 2 * j / dim)
-        j = torch.arange(0, dim // 2, dtype=torch.float32)
+        j = torch.arange(0, dim // 2, dtype=torch.float32).to(device)
         theta = 1.0 / (10000 ** (2 * j / dim))  # (dim//2,)
         # Position angles (outer product of position_ids and theta)
         angles = position_ids[:, None].float() * theta[None, :]  # (seq_len, dim//2)
