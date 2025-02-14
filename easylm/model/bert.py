@@ -31,18 +31,15 @@ class BertModel(torch.nn.Module):
             ) for _ in range(config.num_layers)
             ]
         )
-        # Learnable [CLS] token (to be prepended if not provided in input)
         self.cls_token = torch.nn.Parameter(torch.randn(1, 1, config.hidden_size))
-        # Pooler: a linear layer followed by tanh to get the pooled output from the [CLS] token.
         self.pooler = Linear(config.hidden_size, config.hidden_size)
         self.norm = LayerNormalization(config.hidden_size, config.norm_epsilon)
         self.dropout = Dropout(config.dropout)
-        # Linear head to produce logits over the vocabulary for each token.
         self.linear = Linear(config.hidden_size, config.vocab_size)
 
     def _make_attention_mask(self, X: torch.Tensor) -> torch.Tensor:
         # Create mask from input tokens (assumes token id 0 is padding)
-        mask = (X != 0).unsqueeze(1).unsqueeze(2)  # (B, 1, 1, L)
+        mask = (X != 0).unsqueeze(1).unsqueeze(1)  # (B, 1, 1, L)
         return mask
 
     def forward(self, X: torch.Tensor, return_last_state: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
