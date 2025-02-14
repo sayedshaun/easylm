@@ -22,18 +22,11 @@ class Tokenizer:
         if add_special_tokens:
             warnings.warn("You must retrain the model after adding special tokens.")    
         
-        self.special_tokens = ["[MASK]", "[CLS]", "[SEP], [PAD], [UNK], [SOS], [EOS]"]
+        self.special_tokens = ["[MASK]", "[CLS]", "[SEP]", "[PAD]", "[UNK]", "[SOS]", "[EOS]"]
+
         if add_special_tokens is not None:
             self.special_tokens.extend(add_special_tokens)
-
-        self.mask_token_id = self.encode("[MASK]")[1]
-        self.cls_token_id = self.encode("[CLS]")[1]
-        self.sep_token_id = self.encode("[SEP]")[1]
-        self.pad_token_id = self.encode("[PAD]")[1]
-        self.unk_token_id = self.encode("[UNK]")[1]
-        self.sos_token_id = self.encode("[SOS]")[1]
-        self.eos_token_id = self.encode("[EOS]")[1]    
-
+   
         # Ensure the model directory exists.
         os.makedirs(self._tokenizer_dir, exist_ok=True)
 
@@ -45,13 +38,21 @@ class Tokenizer:
 
         # Load and cache the SentencePiece model.
         self.processor = SentencePieceProcessor(model_file=self._model_path)
+        self.mask_token_id = self.encode("[MASK]")
+        self.cls_token_id = self.encode("[CLS]")
+        self.sep_token_id = self.encode("[SEP]")
+        self.pad_token_id = self.encode("[PAD]")
+        self.unk_token_id = self.encode("[UNK]")
+        self.sos_token_id = self.encode("[SOS]")
+        self.eos_token_id = self.encode("[EOS]") 
 
     def train_vocab_model(self) -> None:
         spm.SentencePieceTrainer.Train(
             input=self._data_dir,
             model_prefix=os.path.join(self._tokenizer_dir, self._model_prefix),
             vocab_size=self.vocab_size,
-            user_defined_symbols=self.special_tokens
+            user_defined_symbols=self.special_tokens,
+            add_dummy_prefix=False
         )
 
     def encode(self, text: str) -> List[int]:
