@@ -59,7 +59,7 @@ class Trainer:
                     dtype=self.precision, 
                     enabled=self.enable_amp
                     ):
-                    loss = self.train_step(self.model, batch)
+                    loss = self.train_step(self.model, batch, self.device)
                 
                 self.scaler.scale(loss).backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
@@ -92,10 +92,10 @@ class Trainer:
 
 
     @staticmethod        
-    def train_step(model: torch.nn.Module, batch):
+    def train_step(model: torch.nn.Module, batch, device:torch.device):
         inputs, targets = batch
-        inputs = inputs.to(model.device)
-        targets = targets.to(model.device)
+        inputs = inputs.to(device)
+        targets = targets.to(device)
         targets = targets.view(-1)
         logits = model(inputs)
         logits = logits.view(-1, logits.size(-1))
@@ -106,10 +106,10 @@ class Trainer:
     
 
     @staticmethod
-    def validation_step(model: torch.nn.Module, batch):
+    def validation_step(model: torch.nn.Module, batch, device:torch.device):
         inputs, targets = batch
-        inputs = inputs.to(model.device)
-        targets = targets.to(model.device)
+        inputs = inputs.to(device)
+        targets = targets.to(device)
         targets = targets.view(-1)
         logits = model(inputs)
         if isinstance(model, BertModel):
@@ -124,7 +124,7 @@ class Trainer:
         for batch in tqdm(self.val_data , desc="Validating"):
             with torch.no_grad():
                 with autocast(device_type=self.device, dtype=self.precision, enabled=self.enable_amp):
-                    loss = self.validation_step(self.model, batch)
+                    loss = self.validation_step(self.model, batch, self.device)
                     self.logs["val_loss"].append(loss.item())
 
 
