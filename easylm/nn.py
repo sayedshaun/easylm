@@ -7,26 +7,26 @@ import torch.nn.functional as F
 
 
 class Linear(nn.Module):
-    def __init__(self, in_features: int, out_features: int, is_bias: bool = True) -> None:
+    def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         super(Linear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.is_bias = is_bias
-        self.weight = nn.Parameter(torch.empty((out_features, in_features)))
-        if is_bias:
-            self.bias = nn.Parameter(torch.empty(out_features))
+        self.is_bias = bias
+        self.w = nn.Parameter(torch.empty((out_features, in_features)))
+        if bias:
+            self.b = nn.Parameter(torch.empty(out_features))
         self._initialize_weights()
 
     def _initialize_weights(self) -> None:
-        nn.init.xavier_normal_(self.weight)
+        nn.init.xavier_normal_(self.w)
         if self.is_bias:
-            nn.init.zeros_(self.bias)
+            nn.init.zeros_(self.b)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         if self.is_bias:
-            return X @ self.weight.T + self.bias
+            return X @ self.w.T + self.b
         else:
-            return X @ self.weight.T
+            return X @ self.w.T
 
 
 class Softmax(nn.Module):
@@ -73,9 +73,9 @@ class Dropout(nn.Module):
             return X
 
 
-class Embeddings(nn.Module):
+class Embedding(nn.Module):
     def __init__(self, num_embeddings: int, embedding_dim: int) -> None:
-        super(Embeddings, self).__init__()
+        super(Embedding, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.weight = nn.Parameter(torch.empty((num_embeddings, embedding_dim)))
@@ -84,7 +84,7 @@ class Embeddings(nn.Module):
     def _initialize_weights(self) -> None:
         nn.init.xavier_normal_(self.weight)
 
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
+    def forward(self, X: torch.Tensor) -> torch.Tensor: 
         if X.type != torch.long:
             X = X.long()
         return self.weight[X]
@@ -98,8 +98,8 @@ class PositionalEmbeddings(nn.Module):
         self.hidden_size = hidden_size
         self.seq_len = seq_len
         self.dropout = dropout
-        self.word_encoding = Embeddings(vocab_size, hidden_size)
-        self.position_encoding = Embeddings(seq_len, hidden_size)
+        self.word_encoding = Embedding(vocab_size, hidden_size)
+        self.position_encoding = Embedding(seq_len, hidden_size)
         self.relu = ReLU()
         self.dropout = Dropout(dropout)
 
@@ -118,10 +118,10 @@ class TransformerMultiheadAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-        self.q_proj = Linear(hidden_size, hidden_size, is_bias=False)
-        self.k_proj = Linear(hidden_size, hidden_size, is_bias=False)
-        self.v_proj = Linear(hidden_size, hidden_size, is_bias=False)
-        self.out_proj = Linear(hidden_size,hidden_size, is_bias=True)
+        self.q_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = Linear(hidden_size,hidden_size, bias=True)
         self.softmax = Softmax(dim=-1)
 
     def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
@@ -237,10 +237,10 @@ class LlamaAttention(torch.nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert hidden_size % num_heads == 0, "Hidden size must be divisible by number of heads"
-        self.query_proj = Linear(hidden_size, hidden_size, is_bias=False)
-        self.key_proj = Linear(hidden_size, hidden_size, is_bias=False)
-        self.value_proj = Linear(hidden_size, hidden_size, is_bias=False)
-        self.out_proj = Linear(hidden_size, hidden_size, is_bias=True)
+        self.query_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.key_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.value_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = Linear(hidden_size, hidden_size, bias=True)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         N, S, H = X.shape # batch, seq_len, hidden_size
@@ -303,7 +303,7 @@ class LlamaBlock(nn.Module):
         self.norm1 = RMSNormalization(hidden_size, norm_epsilon)
         self.norm2 = RMSNormalization(hidden_size, norm_epsilon)
         self.norm3 = RMSNormalization(hidden_size, norm_epsilon)
-        self.dropout = Dropout(dropout=dropout)
+        self.dropout = Dropout(dropout)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         norm_1 = self.norm1(X)
@@ -344,7 +344,7 @@ __all__ = [
     "SiLU",
     "ReLU",
     "Dropout",
-    "Embeddings",
+    "Embedding",
     "PositionalEmbeddings",
     "TransformerMultiheadAttention",
     "LayerNormalization",
