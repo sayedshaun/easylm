@@ -26,7 +26,6 @@ class Trainer:
         self.validation_steps = config.validation_steps
         self.save_steps = config.save_steps
         self.scaler = GradScaler()
-        self.model.to(self.device)
         self.enable_amp = True if torch.cuda.is_available() else False
         # Initialize optimizer if needed
         if self.optimizer is None:
@@ -46,80 +45,7 @@ class Trainer:
             "train_loss": [],
             "val_loss": []
         }
-
-
-    # def train(self) -> None:
-    #     self.model.train()
-    #     global_step = 1
-    #     for epoch in range(1, self.epochs + 1):
-    #         accumulation_steps = 0
-    #         total_loss = 0.0
-    #         for batch in tqdm(self.train_data, desc="Training"):
-    #             with autocast(device_type=self.device, dtype=self.precision, enabled=self.enable_amp):
-    #                 loss = self.train_step(self.model, batch)
-                
-    #             self.scaler.scale(loss).backward()
-    #             accumulation_steps += 1
-    #             total_loss += loss.item()
-
-    #             if accumulation_steps % self.gradient_accumulation_steps == 0:
-    #                 avg_loss = total_loss / self.gradient_accumulation_steps
-    #                 total_loss = 0.0  # Reset accumulated loss
-
-    #                 # Clip gradients and update model
-    #                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
-    #                 self.scaler.step(self.optimizer)
-    #                 self.scaler.update()
-    #                 self.optimizer.zero_grad()
-
-    #                 # Logging
-    #                 if global_step % self.logging_steps == 0 and global_step != 0:
-    #                     self.logs["train_loss"].append(avg_loss)
-    #                     self.logs["global_step"] = global_step
-    #                     self.logs["epoch"] = epoch
-    #                     print(f"Epoch: {epoch}, Global Step: {global_step}, "
-    #                         f"Train Loss: {avg_loss:.4f}, LR: {self.learning_rate:.4f}"
-    #                         )
-
-    #                 # Validation
-    #                 if (global_step % self.validation_steps == 0 and 
-    #                     global_step != 0 and 
-    #                     self.val_data is not None):
-    #                     self.evaluate()
-
-    #                 # Save checkpoint
-    #                 if global_step % self.save_steps == 0 and global_step != 0:
-    #                     torch.save(self.model.state_dict(), f"model_{epoch}_{global_step}.pt")
-
-    #                 global_step += 1
-    #                 accumulation_steps = 0  # Reset accumulation counter
-
-    #         # Handle remaining gradients after epoch
-    #         if accumulation_steps > 0:
-    #             avg_loss = total_loss / accumulation_steps
-    #             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
-    #             self.scaler.step(self.optimizer)
-    #             self.scaler.update()
-    #             self.optimizer.zero_grad()
-
-    #             if global_step % self.logging_steps == 0 and global_step != 0:
-    #                 self.logs["train_loss"].append(avg_loss)
-    #                 self.logs["global_step"] = global_step
-    #                 self.logs["epoch"] = epoch
-    #                 print(f"Epoch: {epoch}, Global Step: {global_step}, "
-    #                     f"Train Loss: {avg_loss:.4f}, LR: {self.learning_rate:.4f}")
-
-    #             if (global_step % self.validation_steps == 0 and 
-    #                 global_step != 0 and 
-    #                 self.val_data is not None):
-    #                 self.evaluate()
-
-    #             if global_step % self.save_steps == 0 and global_step != 0:
-    #                 torch.save(self.model.state_dict(), f"model_{epoch}_{global_step}.pt")
-
-    #             global_step += 1
-
-
+        self.model.to(self.device)
 
 
     def train(self):
@@ -127,6 +53,7 @@ class Trainer:
         global_step = 1
         for epoch in range(1, self.epochs + 1):
             for batch in tqdm(self.train_data , desc="Training"):
+                #
                 with autocast(
                     device_type=self.device, 
                     dtype=self.precision, 
@@ -167,6 +94,8 @@ class Trainer:
     @staticmethod        
     def train_step(model: torch.nn.Module, batch):
         inputs, targets = batch
+        inputs = inputs.to(model.device)
+        targets = targets.to(model.device)
         targets = targets.view(-1)
         logits = model(inputs)
         logits = logits.view(-1, logits.size(-1))
@@ -179,6 +108,8 @@ class Trainer:
     @staticmethod
     def validation_step(model: torch.nn.Module, batch):
         inputs, targets = batch
+        inputs = inputs.to(model.device)
+        targets = targets.to(model.device)
         targets = targets.view(-1)
         logits = model(inputs)
         if isinstance(model, BertModel):
