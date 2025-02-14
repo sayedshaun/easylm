@@ -13,7 +13,6 @@ class GPTConfig:
     norm_epsilon: Union[float, None] = None
     dropout: Union[float, None] = None
     max_seq_len: Union[int, None] = None
-    device: Union[str, torch.device, None] = None
 
 @dataclass
 class LlamaConfig:
@@ -24,7 +23,6 @@ class LlamaConfig:
     norm_epsilon: Union[float, None] = None
     dropout: Union[float, None] = None
     max_seq_len: Union[int, None] = None
-    device: Union[str, torch.device, None] = None
 
 @dataclass
 class BERTConfig:
@@ -35,7 +33,6 @@ class BERTConfig:
     norm_epsilon: Union[float, None] = None
     dropout: Union[float, None] = None
     max_seq_len: Union[int, None] = None
-    device: Union[str, torch.device, None] = None
 
 
 @dataclass
@@ -48,7 +45,6 @@ class VITConfig:
     num_layers: Union[int, None] = None
     norm_epsilon: Union[float, None] = None
     dropout: Union[float, None] = None
-    device: Union[str, torch.device, None] = None
 
 
 @dataclass
