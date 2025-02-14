@@ -1,7 +1,5 @@
-import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from easylm.config import LlamaConfig
 from easylm.nn import Dropout, Embedding, Linear, LlamaBlock
 
@@ -13,12 +11,7 @@ class LlamaModel(nn.Module):
         self.embedding = Embedding(config.vocab_size, config.hidden_size)
         self.blocks = nn.ModuleList(
             [
-            LlamaBlock(
-                hidden_size=config.hidden_size, 
-                num_heads=config.num_heads, 
-                dropout=config.dropout, 
-                norm_epsilon=config.norm_epsilon
-            )
+            LlamaBlock(config.hidden_size, config.num_heads,config.dropout, config.norm_epsilon)
             for _ in range(config.num_layers)
             ]
         )
@@ -42,4 +35,25 @@ class LlamaModel(nn.Module):
     def _make_triangle_mask(self, X: torch.Tensor) -> torch.Tensor:
         mask = torch.tril(torch.ones(X.shape[1], X.shape[1]))
         return mask
+    
+    def generate(self, input_ids: torch.Tensor, max_length: int = 50) -> torch.Tensor:
+        self.eval()
+        with torch.no_grad():
+            generated = input_ids.clone()
+            # Loop for max_length steps
+            for _ in range(max_length):
+                # Get model output: shape (batch_size, seq_len, vocab_size)
+                logits = self(generated)
+                # Focus on the last token's logits
+                next_token_logits = logits[:, -1, :]
+                # Greedy decoding: choose token with highest probability
+                next_token = next_token_logits.argmax(dim=-1, keepdim=True)
+                # Append new token to sequence
+                generated = torch.cat([generated, next_token], dim=1)
+                # If all sequences generated an EOS token, stop early
+                if (next_token == self.config.eos_token_id).all():
+                    break
+            return generated
+
+
     
