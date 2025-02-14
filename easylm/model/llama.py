@@ -3,14 +3,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from easylm.config import LlamaConfig
-from easylm.nn import Dropout, Embeddings, Linear, LlamaBlock
+from easylm.nn import Dropout, Embedding, Linear, LlamaBlock
 
 
 class LlamaModel(nn.Module):
     def __init__(self, config: LlamaConfig) -> None:
         super(LlamaModel, self).__init__()
         self.config = config
-        self.embedding = Embeddings(config.vocab_size, config.hidden_size)
+        self.embedding = Embedding(config.vocab_size, config.hidden_size)
         self.blocks = nn.ModuleList(
             [
             LlamaBlock(
