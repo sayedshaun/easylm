@@ -23,6 +23,8 @@ class Linear(nn.Module):
             nn.init.zeros_(self.b)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
+        self.w.to(X.device)
+        self.b.to(X.device)
         if self.is_bias:
             return X @ self.w.T + self.b
         else:
@@ -85,6 +87,7 @@ class Embedding(nn.Module):
         nn.init.xavier_normal_(self.weight)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor: 
+        self.weight.to(X.device)
         if X.type != torch.long:
             X = X.long()
         return self.weight[X]
