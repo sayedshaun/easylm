@@ -1,9 +1,12 @@
+import os
 import torch
 from tqdm import tqdm
 from typing import Union
 import torch.nn.functional as F
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, Dataset
+
+from easylm.model.bert import BertModel
 
 class Trainer:
     def __init__(self, config: object) -> None:
@@ -45,105 +48,70 @@ class Trainer:
         }
 
 
-    def train(self) -> None:
-        self.model.train()
-        global_step = 1
-        for epoch in range(1, self.epochs + 1):
-            accumulation_steps = 0
-            total_loss = 0.0
-            for batch in tqdm(self.train_data, desc="Training"):
-                with autocast(device_type=self.device, dtype=self.precision, enabled=self.enable_amp):
-                    loss = self.train_step(self.model, batch)
-                
-                self.scaler.scale(loss).backward()
-                accumulation_steps += 1
-                total_loss += loss.item()
-
-                if accumulation_steps % self.gradient_accumulation_steps == 0:
-                    avg_loss = total_loss / self.gradient_accumulation_steps
-                    total_loss = 0.0  # Reset accumulated loss
-
-                    # Clip gradients and update model
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                    self.optimizer.zero_grad()
-
-                    # Logging
-                    if global_step % self.logging_steps == 0 and global_step != 0:
-                        self.logs["train_loss"].append(avg_loss)
-                        self.logs["global_step"] = global_step
-                        self.logs["epoch"] = epoch
-                        print(f"Epoch: {epoch}, Global Step: {global_step}, "
-                            f"Train Loss: {avg_loss:.4f}, LR: {self.learning_rate:.4f}"
-                            )
-
-                    # Validation
-                    if (global_step % self.validation_steps == 0 and 
-                        global_step != 0 and 
-                        self.val_data is not None):
-                        self.evaluate()
-
-                    # Save checkpoint
-                    if global_step % self.save_steps == 0 and global_step != 0:
-                        torch.save(self.model.state_dict(), f"model_{epoch}_{global_step}.pt")
-
-                    global_step += 1
-                    accumulation_steps = 0  # Reset accumulation counter
-
-            # Handle remaining gradients after epoch
-            if accumulation_steps > 0:
-                avg_loss = total_loss / accumulation_steps
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                self.optimizer.zero_grad()
-
-                if global_step % self.logging_steps == 0 and global_step != 0:
-                    self.logs["train_loss"].append(avg_loss)
-                    self.logs["global_step"] = global_step
-                    self.logs["epoch"] = epoch
-                    print(f"Epoch: {epoch}, Global Step: {global_step}, "
-                        f"Train Loss: {avg_loss:.4f}, LR: {self.learning_rate:.4f}")
-
-                if (global_step % self.validation_steps == 0 and 
-                    global_step != 0 and 
-                    self.val_data is not None):
-                    self.evaluate()
-
-                if global_step % self.save_steps == 0 and global_step != 0:
-                    torch.save(self.model.state_dict(), f"model_{epoch}_{global_step}.pt")
-
-                global_step += 1
-
-
-
-
-    # def train(self):
+    # def train(self) -> None:
     #     self.model.train()
     #     global_step = 1
     #     for epoch in range(1, self.epochs + 1):
-    #         for batch in tqdm(self.train_data , desc="Training"):
+    #         accumulation_steps = 0
+    #         total_loss = 0.0
+    #         for batch in tqdm(self.train_data, desc="Training"):
     #             with autocast(device_type=self.device, dtype=self.precision, enabled=self.enable_amp):
     #                 loss = self.train_step(self.model, batch)
                 
     #             self.scaler.scale(loss).backward()
+    #             accumulation_steps += 1
+    #             total_loss += loss.item()
+
+    #             if accumulation_steps % self.gradient_accumulation_steps == 0:
+    #                 avg_loss = total_loss / self.gradient_accumulation_steps
+    #                 total_loss = 0.0  # Reset accumulated loss
+
+    #                 # Clip gradients and update model
+    #                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
+    #                 self.scaler.step(self.optimizer)
+    #                 self.scaler.update()
+    #                 self.optimizer.zero_grad()
+
+    #                 # Logging
+    #                 if global_step % self.logging_steps == 0 and global_step != 0:
+    #                     self.logs["train_loss"].append(avg_loss)
+    #                     self.logs["global_step"] = global_step
+    #                     self.logs["epoch"] = epoch
+    #                     print(f"Epoch: {epoch}, Global Step: {global_step}, "
+    #                         f"Train Loss: {avg_loss:.4f}, LR: {self.learning_rate:.4f}"
+    #                         )
+
+    #                 # Validation
+    #                 if (global_step % self.validation_steps == 0 and 
+    #                     global_step != 0 and 
+    #                     self.val_data is not None):
+    #                     self.evaluate()
+
+    #                 # Save checkpoint
+    #                 if global_step % self.save_steps == 0 and global_step != 0:
+    #                     torch.save(self.model.state_dict(), f"model_{epoch}_{global_step}.pt")
+
+    #                 global_step += 1
+    #                 accumulation_steps = 0  # Reset accumulation counter
+
+    #         # Handle remaining gradients after epoch
+    #         if accumulation_steps > 0:
+    #             avg_loss = total_loss / accumulation_steps
     #             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
     #             self.scaler.step(self.optimizer)
     #             self.scaler.update()
     #             self.optimizer.zero_grad()
 
     #             if global_step % self.logging_steps == 0 and global_step != 0:
-    #                 self.logs["train_loss"].append(loss.item())
+    #                 self.logs["train_loss"].append(avg_loss)
     #                 self.logs["global_step"] = global_step
     #                 self.logs["epoch"] = epoch
-    #                 print(
-    #                     f"Epoch: {epoch}, Global Step: {global_step}, "
-    #                     f"Train Loss: {loss.item():.4f}, "
-    #                     f"Learning Rate: {self.learning_rate:.4f}"
-    #                 )
-                
-    #             if global_step % self.validation_steps == 0 and global_step != 0 and self.val_data is not None:
+    #                 print(f"Epoch: {epoch}, Global Step: {global_step}, "
+    #                     f"Train Loss: {avg_loss:.4f}, LR: {self.learning_rate:.4f}")
+
+    #             if (global_step % self.validation_steps == 0 and 
+    #                 global_step != 0 and 
+    #                 self.val_data is not None):
     #                 self.evaluate()
 
     #             if global_step % self.save_steps == 0 and global_step != 0:
@@ -152,13 +120,59 @@ class Trainer:
     #             global_step += 1
 
 
+
+
+    def train(self):
+        self.model.train()
+        global_step = 1
+        for epoch in range(1, self.epochs + 1):
+            for batch in tqdm(self.train_data , desc="Training"):
+                with autocast(
+                    device_type=self.device, 
+                    dtype=self.precision, 
+                    enabled=self.enable_amp
+                    ):
+                    loss = self.train_step(self.model, batch)
+                
+                self.scaler.scale(loss).backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad()
+
+                if global_step % self.logging_steps == 0 and global_step != 0:
+                    self.logs["train_loss"].append(loss.item())
+                    self.logs["global_step"] = global_step
+                    self.logs["epoch"] = epoch
+                    print(
+                        f"Epoch: {epoch}, Global Step: {global_step}, "
+                        f"Train Loss: {loss.item():.4f}, "
+                        f"Learning Rate: {self.learning_rate:.4f}"
+                    )
+                
+                if (global_step % self.validation_steps == 0 
+                    and global_step != 0 
+                    and self.val_data is not None):
+                    self.evaluate()
+
+                if global_step % self.save_steps == 0 and global_step != 0:
+                    os.makedirs("checkpoints", exist_ok=True)
+                    if os.path.exists("checkpoints/pytorch_moddel.bin"):
+                        os.remove("checkpoints/pytorch_moddel.bin")
+                    torch.save(self.model.state_dict(), f"checkpoints/pytorch_moddel.bin")
+
+                global_step += 1
+
+
     @staticmethod        
     def train_step(model: torch.nn.Module, batch):
         inputs, targets = batch
         targets = targets.view(-1)
-        output = model(inputs)
-        output = output.view(-1, output.size(-1))
-        loss = F.cross_entropy(output, targets)
+        logits = model(inputs)
+        logits = logits.view(-1, logits.size(-1))
+        if isinstance(model, BertModel):
+            logits = logits[1:]
+        loss = F.cross_entropy(logits, targets)
         return loss
     
 
@@ -166,9 +180,11 @@ class Trainer:
     def validation_step(model: torch.nn.Module, batch):
         inputs, targets = batch
         targets = targets.view(-1)
-        output = model(inputs)
-        output = output.view(-1, output.size(-1))
-        loss = F.cross_entropy(output, targets)
+        logits = model(inputs)
+        if isinstance(model, BertModel):
+            logits = logits[1:]
+        logits = logits.view(-1, logits.size(-1))
+        loss = F.cross_entropy(logits, targets)
         return loss
 
 
