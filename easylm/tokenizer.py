@@ -22,13 +22,17 @@ class Tokenizer:
         if add_special_tokens:
             warnings.warn("You must retrain the model after adding special tokens.")    
         
-        self.special_tokens = ["[MASK]", "[CLS]", "[SEP], [PAD]"]
+        self.special_tokens = ["[MASK]", "[CLS]", "[SEP], [PAD], [UNK], [SOS], [EOS]"]
         if add_special_tokens is not None:
             self.special_tokens.extend(add_special_tokens)
 
-        # self.mask_token_id = self.encode("[MASK]")[1]
-        # self.cls_token_id = self.encode("[CLS]")[1]
-        # self.sep_token_id = self.encode("[SEP]")[1]    
+        self.mask_token_id = self.encode("[MASK]")[1]
+        self.cls_token_id = self.encode("[CLS]")[1]
+        self.sep_token_id = self.encode("[SEP]")[1]
+        self.pad_token_id = self.encode("[PAD]")[1]
+        self.unk_token_id = self.encode("[UNK]")[1]
+        self.sos_token_id = self.encode("[SOS]")[1]
+        self.eos_token_id = self.encode("[EOS]")[1]    
 
         # Ensure the model directory exists.
         os.makedirs(self._tokenizer_dir, exist_ok=True)
