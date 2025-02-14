@@ -23,11 +23,9 @@ from easylm.tokenizer import Tokenizer
 from easylm.config import TrainingConfig, LlamaConfig
 from easylm.trainer import Trainer
 
-
 data_path = "data/SherlockHolmes.txt"
 tokenizer = Tokenizer(data_path, vocab_size=5000)
 dataset = NextWordPredDataset(data_path, tokenizer, max_seq_len=50)
-
 model = LlamaModel(
     LlamaConfig(
         vocab_size=tokenizer.vocab_size,
@@ -39,7 +37,6 @@ model = LlamaModel(
         max_seq_len=50
     )
 )
-
 trainer = Trainer(
     TrainingConfig(
         model=model,
@@ -51,10 +48,6 @@ trainer = Trainer(
         logging_steps=10
     )
 )
-
 trainer.train()
 trainer.evaluate()
 ```
-
-
-   
