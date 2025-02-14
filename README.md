@@ -17,36 +17,42 @@ pip install git+https://github.com/sayedshaun/easylm.git
 ## Usage
 
 ```python
-from easylm.models import GPTModel
+from easylm.model import LlamaModel
 from easylm.data import NextWordPredDataset
 from easylm.tokenizer import Tokenizer
-from easylm.config import GPTConfig, TrainingConfig
+from easylm.config import TrainingConfig, LlamaConfig
 from easylm.trainer import Trainer
 
 
-data_path = "data.txt"
-tokenizer = Tokenizer(data_dir=data_path, vocab_size=10000)
-dataset = NextWordPredDataset(data_path, tokenizer, max_seq_len=512)
-model_config = GPTConfig(
-    vocab_size=tokenizer.vocab_size,
-    hidden_size=768,
-    num_heads=12,
-    num_layers=12,
-    norm_epsilon=1e-5,
-    dropout=0.1,
-    max_seq_len=512
+data_path = "data/SherlockHolmes.txt"
+tokenizer = Tokenizer(data_path, vocab_size=5000)
+dataset = NextWordPredDataset(data_path, tokenizer, max_seq_len=50)
+
+model = LlamaModel(
+    LlamaConfig(
+        vocab_size=tokenizer.vocab_size,
+        hidden_size=128,
+        num_heads=4,
+        num_layers=4,
+        norm_epsilon=1e-5,
+        dropout=0.1,
+        max_seq_len=50
+    )
 )
-model = GPTModel(model_config)
-training_config = TrainingConfig(
-    learning_rate=3e-5,
-    num_epochs=1,
-    batch_size=32,
-    warmup_steps=1000,
-    total_steps=10000,
-    max_seq_len=512
+
+trainer = Trainer(
+    TrainingConfig(
+        model=model,
+        train_data=dataset,
+        learning_rate=5e-5,
+        epochs=10,
+        batch_size=8,
+        device="cuda",
+        logging_steps=10
+    )
 )
-trainer = Trainer(training_config)
-trainer.train(model, dataset)
+
+trainer.train()
 trainer.evaluate()
 ```
 
