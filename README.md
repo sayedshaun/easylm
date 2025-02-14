@@ -1,6 +1,6 @@
-# EasyLM A python library for training Language Models
+# EasyLM, A python package for training Language Models from scratch
 
-Welcome to EasyLM, a Python package for training Language Models. EasyLM provides a simple and easy-to-use API for training and using Language Models.
+EasyLM is a python package for training Language Models from scratch. It provides a simple interface to train and evaluate Language Models on various tasks.
 
 ## Installation
 
