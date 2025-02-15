@@ -13,10 +13,11 @@ random.seed(42)
 torch.manual_seed(42)
 
 
-class NextWordPredDataset(torch.utils.data.Dataset):  
+class NextWordPredictDataset(torch.utils.data.Dataset):  
     """
     ### Args:
         file_path (str): Path to the dataset file.
+        tokenizer (Tokenizer): Tokenizer to encode and decode tokens.
         max_seq_len (int): Maximum sequence length for each training sample.
 
     ### Structure:
@@ -28,56 +29,70 @@ class NextWordPredDataset(torch.utils.data.Dataset):
     ```python
     from src.data import NextWordPredDataset
 
-    dataset = NextWordPredDataset(file_path="/path/to/dataset/text.txt", max_seq_len=50)
+    dataset = NextWordPredDataset(file_path="/path/to/dataset/text.txt", tokenizer=tokenizer, max_seq_len=50)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
     ``` 
     """
     def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
         self.n_ctx = max_seq_len  # Context window size
         self.tokenizer = tokenizer
-        
-        # Read and tokenize the dataset
-        with open(file_path, "r", encoding="utf-8") as file:
-            self.text = file.read()
+        self.all_ids = self.data_generator(file_path, tokenizer)
 
-        # Convert text to token IDs
-        self.all_ids = self.tokenizer.encode(self.text)
+    @staticmethod
+    def data_generator(file_path: str, tokenizer: Tokenizer):
+        with open(file_path, "r", encoding="utf-8") as file:
+            text = file.read()
+        all_ids = tokenizer.encode(text)
+        return all_ids
 
     def __len__(self):
         return len(self.all_ids) - self.n_ctx
 
     def __getitem__(self, idx):
         """Retrieve a training sample by index."""
-        input_ids = torch.tensor(self.all_ids[idx: idx + self.n_ctx])
-        target_ids = torch.tensor(self.all_ids[idx + 1: idx + self.n_ctx + 1])
-        return input_ids.long(), target_ids.long()
-
+        input_ids = (
+            self.tokenizer.sos_token_id + 
+            self.all_ids[idx: idx + self.n_ctx] + 
+            [self.tokenizer.eos_token_id]
+        )
+        target_ids = self.all_ids[idx + 1: idx + self.n_ctx + 1]
+        return (
+            torch.tensor(input_ids, dtype=torch.int32), 
+            torch.tensor(target_ids, dtype=torch.int32)
+        )
 
 class MaskedLMDataset(torch.utils.data.Dataset):
+    """
+    ### Args:
+        file_path (str): Path to the dataset file.
+        tokenizer (Tokenizer): Tokenizer to encode and decode tokens.
+        max_seq_len (int): Maximum sequence length for each training sample.
+
+    ### Structure:
+    ```
+    file_path/
+        text.txt
+    ```
+    ### Example:
+    ```python
+    from src.data import MaskedLMDataset
+
+    dataset = MaskedLMDataset(file_path="/path/to/dataset/text.txt", tokenizer=tokenizer, max_seq_len=50)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
+    ``` 
+    """
     def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
-        """
-        Args:
-            file_path (str): path to the text file.
-            tokenizer (Tokenizer): tokenizer to encode and decode tokens.
-            max_seq_len (int): total sequence length (including special tokens).
-            mask_prob (float): probability of masking a token.
-        """
         self.file_path = file_path
         self.max_seq_len = max_seq_len
         self.tokenizer = tokenizer
         self.mask_prob = mask_prob
-        
-        self.mask_token_id = tokenizer.encode("[MASK]")[1]
-        self.cls_token_id = tokenizer.encode("[CLS]")[1]
-        self.sep_token_id = tokenizer.encode("[SEP]")[1]
-        self.pad_token_id = tokenizer.encode("[PAD]")[1]
+        self.all_ids = self.data_generator(file_path, tokenizer)
 
-        self.all_ids = self.data_generator()
-
-    def data_generator(self):    
-        with open(self.file_path, "r", encoding="utf-8") as file:
+    @staticmethod
+    def data_generator(file_path: str, tokenizer: Tokenizer):    
+        with open(file_path, "r", encoding="utf-8") as file:
             text = file.read()
-        all_ids = self.tokenizer.encode(text)
+        all_ids = tokenizer.encode(text)
         return all_ids
 
     def __len__(self):
@@ -86,7 +101,7 @@ class MaskedLMDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         chunk = self.all_ids[idx: idx + self.max_seq_len - 2]
-        input_ids = [self.cls_token_id] + chunk + [self.sep_token_id]
+        input_ids = [self.tokenizer.cls_token_id] + chunk + [self.tokenizer.sep_token_id]
         target_ids = [-100] * len(input_ids)
 
         for i in range(1, len(input_ids) - 1):
@@ -95,7 +110,7 @@ class MaskedLMDataset(torch.utils.data.Dataset):
                 rand = random.random()
                 if rand < 0.8:
                     # 80% of the time, replace with [MASK]
-                    input_ids[i] = self.mask_token_id
+                    input_ids[i] = self.tokenizer.mask_token_id
                 elif rand < 0.9:
                     # 10% of the time, replace with a random token from the vocabulary.
                     input_ids[i] = random.choice(range(self.tokenizer.vocab_size))
@@ -212,7 +227,7 @@ class ImageClassificationDataset(torch.utils.data.Dataset):
 
 
 __all__ = [
-    "NextWordPredDataset",
+    "NextWordPredictDataset",
     "MaskedLMDataset",
     "ImageClassificationDataset",
 ]
