@@ -11,7 +11,12 @@ class LlamaModel(nn.Module):
         self.embedding = Embedding(config.vocab_size, config.hidden_size)
         self.blocks = nn.ModuleList(
             [
-                LlamaBlock(config.hidden_size, config.num_heads,config.dropout, config.norm_epsilon)
+                LlamaBlock(
+                    config.hidden_size, 
+                    config.num_heads,
+                    config.dropout, 
+                    config.norm_epsilon
+                    )
                 for _ in range(config.num_layers)
             ]
         )
@@ -19,9 +24,9 @@ class LlamaModel(nn.Module):
         self.linear = Linear(config.hidden_size, config.vocab_size)
     
 
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
+    def forward(self, X: torch.Tensor, causal_mask: bool = False) -> torch.Tensor:
+        mask = self._make_triangle_mask(X) if causal_mask else None 
         position_ids = self._make_position_ids(X)
-        mask = self._make_triangle_mask(X)
         X = self.embedding(X)
         for block in self.blocks:
             X = block(X, position_ids, mask)

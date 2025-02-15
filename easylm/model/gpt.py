@@ -16,41 +16,40 @@ class GPTModel(nn.Module):
             config.dropout
         )
         self.blocks = nn.ModuleList(
-            [TransformerDecoderBlock(
-                hidden_size=config.hidden_size, 
-                num_heads=config.num_heads,
-                norm_epsilon=config.norm_epsilon,
-                dropout=config.dropout, 
-            ) for _ in range(config.num_layers)
+            [
+                TransformerDecoderBlock(
+                    config.hidden_size, 
+                    config.num_heads,
+                    config.norm_epsilon,
+                    config.dropout, 
+                    ) 
+                for _ in range(config.num_layers)
             ]
         )
         self.linear = Linear(config.hidden_size, config.vocab_size)
 
-        
-    def forward(self, X: torch.Tensor,  return_last_state: bool = False)-> torch.Tensor:
-        mask = self._make_causal_mask(X)
+    def forward(self, X: torch.Tensor, causal_mask: bool = False)-> torch.Tensor:
+        mask = self._make_causal_mask(X) if causal_mask else None
         X = self.embedding(X)
         for block in self.blocks:
             X = block(X, mask)
         logits = self.linear(X)
-        if return_last_state:
-            return X
         return logits
     
     def _make_causal_mask(self, X: torch.Tensor)-> torch.Tensor:
         mask = torch.tril(torch.ones(X.shape[1], X.shape[1], device=X.device))
         return mask
 
-
-    @torch.no_grad()
-    def generate(self, start:str, max_length:int=50, temperature:float=0.5, device:str="cpu")->str:
-        outputs = start
-        for _ in range(max_length):
-            long = torch.LongTensor(outputs).unsqueeze(0).to(device)
-            logits = self(long)[:, -1, :]/temperature
-            probs = torch.softmax(logits, dim=-1)
-            index = torch.multinomial(probs, num_samples=1)
-            top_p = index[0, -1].item()
-            outputs.append(top_p)
-        return "".join(Tokenizer.decode(outputs))
+    def generate(self, input_ids: torch.Tensor, eos_token_id: int, max_length: int = 50) -> torch.Tensor:
+        self.eval()
+        with torch.no_grad():
+            generated = input_ids.clone()
+            for _ in range(max_length):
+                logits = self(generated) # Get model output: shape (batch_size, seq_len, vocab_size)
+                next_token_logits = logits[:, -1, :] # Focus on the last token's logits
+                next_token = next_token_logits.argmax(dim=-1, keepdim=True) # Greedy decoding: choose token with highest probability
+                generated = torch.cat([generated, next_token], dim=1) # Append new token to sequence
+                if next_token == eos_token_id:
+                    break
+            return generated
 
