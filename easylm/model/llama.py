@@ -37,7 +37,7 @@ class LlamaModel(nn.Module):
         mask = torch.tril(torch.ones(X.shape[1], X.shape[1], device=X.device))
         return mask
     
-    def generate(self, input_ids: torch.Tensor, max_length: int = 50) -> torch.Tensor:
+    def generate(self, input_ids: torch.Tensor, eos_token_id, max_length: int = 50) -> torch.Tensor:
         self.eval()
         with torch.no_grad():
             generated = input_ids.clone()
@@ -52,7 +52,7 @@ class LlamaModel(nn.Module):
                 # Append new token to sequence
                 generated = torch.cat([generated, next_token], dim=1)
                 # If all sequences generated an EOS token, stop early
-                if (next_token == self.config.eos_token_id).all():
+                if next_token == eos_token_id:
                     break
             return generated
 
