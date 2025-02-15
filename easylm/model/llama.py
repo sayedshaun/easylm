@@ -11,13 +11,14 @@ class LlamaModel(nn.Module):
         self.embedding = Embedding(config.vocab_size, config.hidden_size)
         self.blocks = nn.ModuleList(
             [
-            LlamaBlock(config.hidden_size, config.num_heads,config.dropout, config.norm_epsilon)
-            for _ in range(config.num_layers)
+                LlamaBlock(config.hidden_size, config.num_heads,config.dropout, config.norm_epsilon)
+                for _ in range(config.num_layers)
             ]
         )
         self.dropout = Dropout(config.dropout)
         self.linear = Linear(config.hidden_size, config.vocab_size)
     
+
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         position_ids = self._make_position_ids(X)
         mask = self._make_triangle_mask(X)
@@ -29,11 +30,11 @@ class LlamaModel(nn.Module):
         return logits
     
     def _make_position_ids(self, X: torch.Tensor) -> torch.Tensor:
-        position_ids = torch.arange(X.shape[1])
+        position_ids = torch.arange(X.shape[1], device=X.device)
         return position_ids
     
     def _make_triangle_mask(self, X: torch.Tensor) -> torch.Tensor:
-        mask = torch.tril(torch.ones(X.shape[1], X.shape[1]))
+        mask = torch.tril(torch.ones(X.shape[1], X.shape[1], device=X.device))
         return mask
     
     def generate(self, input_ids: torch.Tensor, max_length: int = 50) -> torch.Tensor:
