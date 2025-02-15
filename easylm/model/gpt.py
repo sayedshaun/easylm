@@ -38,7 +38,7 @@ class GPTModel(nn.Module):
         return logits
     
     def _make_causal_mask(self, X: torch.Tensor)-> torch.Tensor:
-        mask = torch.tril(torch.ones(X.shape[1], X.shape[1]))
+        mask = torch.tril(torch.ones(X.shape[1], X.shape[1], device=X.device))
         return mask
 
 
