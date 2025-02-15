@@ -4,7 +4,6 @@ from torch import nn
 from typing import Tuple, Union
 import torch.nn.functional as F
 
-
 class Linear(nn.Module):
     def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         super(Linear, self).__init__()
@@ -98,8 +97,8 @@ class PositionalEmbeddings(nn.Module):
         self.hidden_size = hidden_size
         self.seq_len = seq_len
         self.dropout = dropout
-        self.word_encoding = Embedding(vocab_size, hidden_size)
-        self.position_encoding = Embedding(seq_len, hidden_size)
+        self.word_encoding = nn.Embedding(vocab_size, hidden_size)
+        self.position_encoding = nn.Embedding(seq_len, hidden_size)
         self.relu = ReLU()
         self.dropout = Dropout(dropout)
 
@@ -118,11 +117,10 @@ class TransformerMultiheadAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-        self.q_proj = Linear(hidden_size, hidden_size, bias=False, )
-        self.k_proj = Linear(hidden_size, hidden_size, bias=False, )
-        self.v_proj = Linear(hidden_size, hidden_size, bias=False, )
-        self.out_proj = Linear(hidden_size,hidden_size, bias=True, )
-        self.softmax = Softmax(dim=-1)
+        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False, )
+        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False, )
+        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False, )
+        self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True, )
 
     def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
         N, L, D = Q.shape
@@ -134,16 +132,16 @@ class TransformerMultiheadAttention(nn.Module):
         score = Q @ K.transpose(-2, -1) / math.sqrt(self.head_dim)
         if mask is not None:
             score = score.masked_fill(mask == 0, float("-inf"))
-        weights = self.softmax(score)
+        weights = F.softmax(score)
         attention = weights @ V
 
         output = attention.transpose(1, 2).contiguous().view(N, L, D)
         return self.out_proj(output)
 
 
-class LayerNormalization(nn.Module):
+class LayerNorm(nn.Module):
     def __init__(self, hidden_size:int, epsilon:float=1e-5) -> None:
-        super(LayerNormalization, self).__init__()
+        super(LayerNorm, self).__init__()
         self.epsilon = epsilon
         self.gamma = nn.Parameter(torch.empty(hidden_size, ))
         self.beta = nn.Parameter(torch.empty(hidden_size, ))
@@ -158,10 +156,10 @@ class LayerNormalization(nn.Module):
 class FeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(FeedForward, self).__init__()
-        self.fc1 = Linear(hidden_size, intermediate_size)
-        self.act = ReLU()
-        self.fc2 = Linear(intermediate_size, hidden_size)
-        self.dropout = Dropout(dropout)
+        self.fc1 = nn.Linear(hidden_size, intermediate_size)
+        self.act = nn.ReLU()
+        self.fc2 = nn.Linear(intermediate_size, hidden_size)
+        self.dropout = nn.Dropout(dropout)
     
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         X = self.fc1(X)
@@ -176,8 +174,8 @@ class TransformerDecoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerDecoderBlock, self).__init__()
         self.mha = TransformerMultiheadAttention(hidden_size, num_heads)
-        self.norm_1 = LayerNormalization(hidden_size, norm_epsilon)
-        self.norm_2 = LayerNormalization(hidden_size, norm_epsilon)
+        self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
+        self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
     def forward(self, X:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
@@ -187,21 +185,23 @@ class TransformerDecoderBlock(nn.Module):
         return self.norm_2(output + attention)
     
 
-class TransformerEncoderBlock(TransformerDecoderBlock):
+class TransformerEncoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
-        super(TransformerEncoderBlock, self).__init__(hidden_size, num_heads, norm_epsilon, dropout)
-        self.mha = TransformerMultiheadAttention(hidden_size, num_heads, )
+        super(TransformerEncoderBlock, self).__init__()
+        self.mha = TransformerMultiheadAttention(hidden_size, num_heads)
+        self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
+        self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
+        self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
-    def forward(self, X: torch.Tensor, paddding_mask: torch.Tensor = None) -> torch.Tensor:
-        attention = self.mha(X, X, X, paddding_mask)
+    def forward(self, X:torch.Tensor, padding_mask:torch.Tensor=None)->torch.Tensor:
+        attention= self.mha(X, X, X, padding_mask)
         attention = self.norm_1(attention + X)
         output = self.mlp(attention)
         return self.norm_2(output + attention)
 
-
-class RMSNormalization(nn.Module):
+class RMSNorm(nn.Module):
     def __init__(self, dim: int, epsilon: float) -> None:
-        super(RMSNormalization, self).__init__()
+        super(RMSNorm, self).__init__()
         self.gamma = nn.Parameter(torch.empty(dim))
         self.epsilon = epsilon
         self._init_weights()
@@ -218,10 +218,10 @@ class RMSNormalization(nn.Module):
 class LlamaFeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(LlamaFeedForward, self).__init__()
-        self.fc1 = Linear(hidden_size, intermediate_size)
-        self.act = SiLU()
-        self.fc2 = Linear(intermediate_size, hidden_size)
-        self.dropout = Dropout(dropout)
+        self.fc1 = nn.Linear(hidden_size, intermediate_size)
+        self.act = nn.SiLU()
+        self.fc2 = nn.Linear(intermediate_size, hidden_size)
+        self.dropout = nn.Dropout(dropout)
     
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         X = self.fc1(X)
@@ -239,10 +239,10 @@ class LlamaAttention(torch.nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert hidden_size % num_heads == 0, "Hidden size must be divisible by number of heads"
-        self.query_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.key_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.value_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.out_proj = Linear(hidden_size, hidden_size, bias=True)
+        self.query_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.key_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.value_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=True)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         N, S, H = X.shape # batch, seq_len, hidden_size
@@ -303,14 +303,14 @@ class LlamaBlock(nn.Module):
         self.norm_epsilon = norm_epsilon
         self.attention = LlamaAttention(hidden_size, num_heads)
         self.mlp = LlamaFeedForward(hidden_size, hidden_size * 4, dropout)
-        self.norm1 = RMSNormalization(hidden_size, norm_epsilon)
-        self.norm2 = RMSNormalization(hidden_size, norm_epsilon)
-        self.norm3 = RMSNormalization(hidden_size, norm_epsilon)
-        self.dropout = Dropout(dropout)
+        self.norm1 = nn.RMSNorm(hidden_size, norm_epsilon)
+        self.norm2 = nn.RMSNorm(hidden_size, norm_epsilon)
+        self.norm3 = nn.RMSNorm(hidden_size, norm_epsilon)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         norm_1 = self.norm1(X)
-        attention = self.attention(norm_1, position_ids)
+        attention = self.attention(norm_1, position_ids, mask)
         norm_2 = self.norm2(attention)
         mlp = self.mlp(norm_2)
         return mlp + attention
@@ -350,11 +350,11 @@ __all__ = [
     "Embedding",
     "PositionalEmbeddings",
     "TransformerMultiheadAttention",
-    "LayerNormalization",
+    "LayerNorm",
     "FeedForward",
     "TransformerDecoderBlock",
     "TransformerEncoderBlock",
-    "RMSNormalization",
+    "RMSNorm",
     "LlamaFeedForward",
     "LlamaAttention",
     "LlamaBlock",
