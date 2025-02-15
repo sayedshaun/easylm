@@ -52,8 +52,7 @@ class Trainer:
         self.model.train()
         global_step = 1
         for epoch in range(1, self.epochs + 1):
-            for batch in tqdm(self.train_data , desc="Training"):
-                #
+            for batch in tqdm(self.train_data, desc="Training"):
                 with autocast(
                     device_type=self.device, 
                     dtype=self.precision, 
