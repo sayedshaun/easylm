@@ -172,10 +172,10 @@ class FeedForward(torch.nn.Module):
     
     def net(self, X: torch.Tensor) -> torch.Tensor:
         net =  nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size, device=self.device),
+            Linear(self.hidden_size, self.intermediate_size),
             ReLU(),
             Dropout(self.dropout),
-            Linear(self.intermediate_size, self.hidden_size, device=self.device),
+            Linear(self.intermediate_size, self.hidden_size),
             Dropout(self.dropout)
         )
         return net(X)
@@ -236,10 +236,10 @@ class LlamaFeedForward(torch.nn.Module):
     
     def net(self, X: torch.Tensor) -> torch.Tensor:
         net =  nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size, device=self.device),
+            Linear(self.hidden_size, self.intermediate_size),
             SiLU(),
             Dropout(self.dropout),
-            Linear(self.intermediate_size, self.hidden_size, device=self.device),
+            Linear(self.intermediate_size, self.hidden_size),
             Dropout(self.dropout)
         )
         return net(X)
