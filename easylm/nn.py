@@ -97,17 +97,19 @@ class PositionalEmbeddings(nn.Module):
         self.hidden_size = hidden_size
         self.seq_len = seq_len
         self.dropout = dropout
-        self.word_encoding = nn.Embedding(vocab_size, hidden_size)
-        self.position_encoding = nn.Embedding(seq_len, hidden_size)
-        self.relu = ReLU()
-        self.dropout = Dropout(dropout)
+        self.word_encoding = Embedding(vocab_size, hidden_size)
+        self.position_encoding = Embedding(seq_len, hidden_size)
 
     def forward(self, X:torch.Tensor)->torch.Tensor:
+        if X.shape[1] > self.seq_len:
+            raise ValueError(
+                f"Input sequence length {X.shape[1]} is greater than seq_len {self.seq_len}"
+            )
         w_embedding = self.word_encoding(X)
         positions = torch.arange(X.shape[1]).unsqueeze(0).to(X.device)
         p_embedding = self.position_encoding(positions)
         embeddings = w_embedding + p_embedding
-        return self.relu(self.dropout(embeddings))
+        return embeddings
 
 
 class TransformerMultiheadAttention(nn.Module):
@@ -117,10 +119,10 @@ class TransformerMultiheadAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False, )
-        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False, )
-        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False, )
-        self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True, )
+        self.q_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = Linear(hidden_size,hidden_size, bias=True)
 
     def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
         N, L, D = Q.shape
@@ -129,11 +131,11 @@ class TransformerMultiheadAttention(nn.Module):
         K = K.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
         V = V.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
         
-        score = Q @ K.transpose(-2, -1) / math.sqrt(self.head_dim)
+        score = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.head_dim)
         if mask is not None:
             score = score.masked_fill(mask == 0, float("-inf"))
-        weights = F.softmax(score)
-        attention = weights @ V
+        weights = F.softmax(score, dim=-1)
+        attention = torch.matmul(weights, V)
 
         output = attention.transpose(1, 2).contiguous().view(N, L, D)
         return self.out_proj(output)
@@ -156,10 +158,10 @@ class LayerNorm(nn.Module):
 class FeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(FeedForward, self).__init__()
-        self.fc1 = nn.Linear(hidden_size, intermediate_size)
-        self.act = nn.ReLU()
-        self.fc2 = nn.Linear(intermediate_size, hidden_size)
-        self.dropout = nn.Dropout(dropout)
+        self.fc1 = Linear(hidden_size, intermediate_size)
+        self.act = ReLU()
+        self.fc2 = Linear(intermediate_size, hidden_size)
+        self.dropout = Dropout(dropout)
     
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         X = self.fc1(X)
@@ -174,11 +176,11 @@ class TransformerDecoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerDecoderBlock, self).__init__()
         self.mha = TransformerMultiheadAttention(hidden_size, num_heads)
-        self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
-        self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
+        self.norm_1 = LayerNorm(hidden_size, norm_epsilon)
+        self.norm_2 = LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
-    def forward(self, X:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
+    def forward(self, X:torch.Tensor, mask: Union[torch.Tensor, None] = None)->torch.Tensor:
         attention= self.mha(X, X, X, mask)
         attention = self.norm_1(attention + X)
         output = self.mlp(attention)
@@ -189,11 +191,11 @@ class TransformerEncoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerEncoderBlock, self).__init__()
         self.mha = TransformerMultiheadAttention(hidden_size, num_heads)
-        self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
-        self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
+        self.norm_1 = LayerNorm(hidden_size, norm_epsilon)
+        self.norm_2 = LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
-    def forward(self, X:torch.Tensor, padding_mask:torch.Tensor=None)->torch.Tensor:
+    def forward(self, X:torch.Tensor, padding_mask: Union[torch.Tensor, None] = None)->torch.Tensor:
         attention= self.mha(X, X, X, padding_mask)
         attention = self.norm_1(attention + X)
         output = self.mlp(attention)
@@ -218,10 +220,10 @@ class RMSNorm(nn.Module):
 class LlamaFeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(LlamaFeedForward, self).__init__()
-        self.fc1 = nn.Linear(hidden_size, intermediate_size)
-        self.act = nn.SiLU()
-        self.fc2 = nn.Linear(intermediate_size, hidden_size)
-        self.dropout = nn.Dropout(dropout)
+        self.fc1 = Linear(hidden_size, intermediate_size)
+        self.act = SiLU()
+        self.fc2 = Linear(intermediate_size, hidden_size)
+        self.dropout = Dropout(dropout)
     
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         X = self.fc1(X)
@@ -239,10 +241,10 @@ class LlamaAttention(torch.nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert hidden_size % num_heads == 0, "Hidden size must be divisible by number of heads"
-        self.query_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.key_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.value_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=True)
+        self.query_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.key_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.value_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = Linear(hidden_size, hidden_size, bias=True)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         N, S, H = X.shape # batch, seq_len, hidden_size
@@ -303,10 +305,10 @@ class LlamaBlock(nn.Module):
         self.norm_epsilon = norm_epsilon
         self.attention = LlamaAttention(hidden_size, num_heads)
         self.mlp = LlamaFeedForward(hidden_size, hidden_size * 4, dropout)
-        self.norm1 = nn.RMSNorm(hidden_size, norm_epsilon)
-        self.norm2 = nn.RMSNorm(hidden_size, norm_epsilon)
-        self.norm3 = nn.RMSNorm(hidden_size, norm_epsilon)
-        self.dropout = nn.Dropout(dropout)
+        self.norm1 = RMSNorm(hidden_size, norm_epsilon)
+        self.norm2 = RMSNorm(hidden_size, norm_epsilon)
+        self.norm3 = RMSNorm(hidden_size, norm_epsilon)
+        self.dropout = Dropout(dropout)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         norm_1 = self.norm1(X)
