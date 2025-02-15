@@ -13,35 +13,38 @@ random.seed(42)
 torch.manual_seed(42)
 
 
-class NextWordPredictDataset(torch.utils.data.Dataset):  
-    def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
-        self.n_ctx = max_seq_len  # Context window size
+import torch
+from torch.utils.data import Dataset
+from typing import Tuple
+
+class NextWordPredictDataset(Dataset):
+    def __init__(self, file_path: str, tokenizer, max_seq_len: int) -> None:
+        self.max_seq_len = max_seq_len
         self.tokenizer = tokenizer
-        self.all_ids = self.data_generator(file_path, tokenizer)
+        self.all_ids = self.load_data(file_path, tokenizer)
 
     @staticmethod
-    def data_generator(file_path: str, tokenizer: Tokenizer):
+    def load_data(file_path: str, tokenizer) -> list:
         with open(file_path, "r", encoding="utf-8") as file:
             text = file.read()
-        all_ids = tokenizer.encode(text)
-        return all_ids
+        return tokenizer.encode(text)
 
-    def __len__(self):
-        return len(self.all_ids) - self.n_ctx
+    def __len__(self) -> int:
+        # Each sample requires block_size + 1 tokens
+        return len(self.all_ids) - self.max_seq_len
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Retrieve a training sample by index."""
-        input_ids = (
-            self.tokenizer.sos_token_id + 
-            self.all_ids[idx: idx + self.n_ctx] + 
-            self.tokenizer.eos_token_id
+        # Get a contiguous block of block_size+1 tokens
+        block = self.all_ids[idx: idx + self.max_seq_len + 1]
+        # Input: first block_size tokens
+        input_ids = block[:-1]
+        # Target: next tokens (i.e., the input shifted by one position)
+        target_ids = block[1:]
+        return (
+            torch.tensor(input_ids, dtype=torch.long), 
+            torch.tensor(target_ids, dtype=torch.long)
         )
-        target_ids = (
-            self.tokenizer.sos_token_id +
-            self.all_ids[idx + 1: idx + self.n_ctx + 1] +
-            self.tokenizer.eos_token_id
-        )
-        return torch.tensor(input_ids), torch.tensor(target_ids)
+
 
 class MaskedLMDataset(torch.utils.data.Dataset):
     def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
