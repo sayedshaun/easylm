@@ -51,7 +51,7 @@ class NextWordPredictDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         """Retrieve a training sample by index."""
         input_ids = (
-            self.tokenizer.sos_token_id + 
+            [self.tokenizer.sos_token_id] + 
             self.all_ids[idx: idx + self.n_ctx] + 
             [self.tokenizer.eos_token_id]
         )
