@@ -14,13 +14,12 @@ class Linear(nn.Module):
         self.weight = nn.Parameter(torch.empty((out_features, in_features)))
         if self._bias:
             self.bias = nn.Parameter(torch.empty(out_features))
-        else:
-            self.register_parameter('bias', None)
+  
         self._initialize_weights()
 
     def _initialize_weights(self):
         nn.init.xavier_uniform_(self.weight)
-        if self._bias is not None:
+        if self._bias:
             nn.init.zeros_(self.bias)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
