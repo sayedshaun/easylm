@@ -11,7 +11,7 @@ class Linear(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self._bias = bias
-        self.weights = nn.Parameter(torch.empty((out_features, in_features)))
+        self.weight = nn.Parameter(torch.empty((out_features, in_features)))
         if self._bias:
             self.bias = nn.Parameter(torch.empty(out_features))
         else:
@@ -25,9 +25,9 @@ class Linear(nn.Module):
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         if self._bias:
-            return X @ self.weights.T + self.bias
+            return X @ self.weight.T + self.bias
         else:
-            return X @ self.weights.T
+            return X @ self.weight.T
 
 
 class Softmax(nn.Module):
