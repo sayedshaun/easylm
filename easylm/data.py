@@ -56,10 +56,7 @@ class NextWordPredictDataset(torch.utils.data.Dataset):
             [self.tokenizer.eos_token_id]
         )
         target_ids = self.all_ids[idx + 1: idx + self.n_ctx + 1]
-        return (
-            torch.tensor(input_ids, dtype=torch.int32), 
-            torch.tensor(target_ids, dtype=torch.int32)
-        )
+        return torch.tensor(input_ids), torch.tensor(target_ids)
 
 class MaskedLMDataset(torch.utils.data.Dataset):
     """
