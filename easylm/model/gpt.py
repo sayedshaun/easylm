@@ -28,7 +28,7 @@ class GPTModel(nn.Module):
         )
         self.linear = Linear(config.hidden_size, config.vocab_size)
 
-    def forward(self, X: torch.Tensor, causal_mask: bool = False)-> torch.Tensor:
+    def forward(self, X: torch.Tensor, causal_mask: bool = True)-> torch.Tensor:
         mask = self._make_causal_mask(X) if causal_mask else None
         X = self.embedding(X)
         for block in self.blocks:
