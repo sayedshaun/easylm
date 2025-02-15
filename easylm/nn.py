@@ -166,22 +166,18 @@ class LayerNormalization(nn.Module):
 class FeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(FeedForward, self).__init__()
-        self.hidden_size = hidden_size
-        self.intermediate_size = intermediate_size
-        self.dropout = dropout
+        self.fc1 = Linear(hidden_size, intermediate_size)
+        self.act = ReLU()
+        self.fc2 = Linear(intermediate_size, hidden_size)
+        self.dropout = Dropout(dropout)
     
-    def net(self, X: torch.Tensor) -> torch.Tensor:
-        net =  nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size),
-            ReLU(),
-            Dropout(self.dropout),
-            Linear(self.intermediate_size, self.hidden_size),
-            Dropout(self.dropout)
-        )
-        return net(X)
-
     def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return self.net(X)
+        X = self.fc1(X)
+        X = self.dropout(X)
+        X = self.act(X)
+        X = self.dropout(X)
+        X = self.fc2(X)
+        return X
 
 
 class TransformerDecoderBlock(nn.Module):
@@ -230,19 +226,18 @@ class RMSNormalization(nn.Module):
 class LlamaFeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(LlamaFeedForward, self).__init__()
-        self.hidden_size = hidden_size
-        self.intermediate_size = intermediate_size
-        self.dropout = dropout
+        self.fc1 = Linear(hidden_size, intermediate_size)
+        self.act = SiLU()
+        self.fc2 = Linear(intermediate_size, hidden_size)
+        self.dropout = Dropout(dropout)
     
-    def net(self, X: torch.Tensor) -> torch.Tensor:
-        net =  nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size),
-            SiLU(),
-            Dropout(self.dropout),
-            Linear(self.intermediate_size, self.hidden_size),
-            Dropout(self.dropout)
-        )
-        return net(X)
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        X = self.fc1(X)
+        X = self.dropout(X)
+        X = self.act(X)
+        X = self.dropout(X)
+        X = self.fc2(X)
+        return X
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         return self.net(X)
