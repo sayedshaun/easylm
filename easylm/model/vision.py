@@ -2,7 +2,7 @@ import torch
 from easylm.config import VITConfig
 from easylm.nn import (
     Dropout, 
-    LayerNormalization, 
+    LayerNorm, 
     Linear, 
     PatchEmbedding, 
     TransformerEncoderBlock
@@ -27,7 +27,7 @@ class VisionTransformer(torch.nn.Module):
                 norm_epsilon=config.norm_epsilon,
                 dropout=config.dropout) for _ in range(config.num_layers)
         ])
-        self.norm = LayerNormalization(config.hidden_size, config.norm_epsilon)
+        self.norm = LayerNorm(config.hidden_size, config.norm_epsilon)
         self.dropout = Dropout(0.1)
         self.head = Linear(config.hidden_size, config.num_classes)
 

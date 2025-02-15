@@ -4,7 +4,7 @@ from easylm.config import BERTConfig
 from easylm.nn import (
     PositionalEmbeddings, 
     TransformerEncoderBlock, 
-    LayerNormalization, 
+    LayerNorm, 
     Dropout, 
     Linear
 )
@@ -33,7 +33,7 @@ class BertModel(torch.nn.Module):
         )
         self.cls_token = torch.nn.Parameter(torch.randn(1, 1, config.hidden_size))
         self.pooler = Linear(config.hidden_size, config.hidden_size)
-        self.norm = LayerNormalization(config.hidden_size, config.norm_epsilon)
+        self.norm = LayerNorm(config.hidden_size, config.norm_epsilon)
         self.dropout = Dropout(config.dropout)
         self.linear = Linear(config.hidden_size, config.vocab_size)
 
