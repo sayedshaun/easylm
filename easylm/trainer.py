@@ -66,7 +66,7 @@ class Trainer:
                 self.scaler.update()
                 self.optimizer.zero_grad()
 
-                if global_step % self.logging_steps == 0 and global_step != 0:
+                if self.logging_steps is not None and global_step % self.logging_steps == 0 and global_step != 0:
                     self.logs["train_loss"].append(loss.item())
                     self.logs["global_step"] = global_step
                     self.logs["epoch"] = epoch
@@ -78,8 +78,10 @@ class Trainer:
                 
                 if (global_step % self.validation_steps == 0 
                     and global_step != 0 
-                    and self.val_data is not None):
+                    and self.val_data is not None
+                    ):
                     self.evaluate()
+                    self.model.train()
 
                 if global_step % self.save_steps == 0 and global_step != 0:
                     os.makedirs("checkpoints", exist_ok=True)
