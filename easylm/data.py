@@ -14,25 +14,6 @@ torch.manual_seed(42)
 
 
 class NextWordPredictDataset(torch.utils.data.Dataset):  
-    """
-    ### Args:
-        file_path (str): Path to the dataset file.
-        tokenizer (Tokenizer): Tokenizer to encode and decode tokens.
-        max_seq_len (int): Maximum sequence length for each training sample.
-
-    ### Structure:
-    ```
-    file_path/
-        text.txt
-    ```
-    ### Example:
-    ```python
-    from src.data import NextWordPredDataset
-
-    dataset = NextWordPredDataset(file_path="/path/to/dataset/text.txt", tokenizer=tokenizer, max_seq_len=50)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
-    ``` 
-    """
     def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
         self.n_ctx = max_seq_len  # Context window size
         self.tokenizer = tokenizer
@@ -48,36 +29,21 @@ class NextWordPredictDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.all_ids) - self.n_ctx
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Retrieve a training sample by index."""
         input_ids = (
-            [self.tokenizer.sos_token_id] + 
+            self.tokenizer.sos_token_id + 
             self.all_ids[idx: idx + self.n_ctx] + 
-            [self.tokenizer.eos_token_id]
+            self.tokenizer.eos_token_id
         )
-        target_ids = self.all_ids[idx + 1: idx + self.n_ctx + 1]
+        target_ids = (
+            self.tokenizer.sos_token_id +
+            self.all_ids[idx + 1: idx + self.n_ctx + 1] +
+            self.tokenizer.eos_token_id
+        )
         return torch.tensor(input_ids), torch.tensor(target_ids)
 
 class MaskedLMDataset(torch.utils.data.Dataset):
-    """
-    ### Args:
-        file_path (str): Path to the dataset file.
-        tokenizer (Tokenizer): Tokenizer to encode and decode tokens.
-        max_seq_len (int): Maximum sequence length for each training sample.
-
-    ### Structure:
-    ```
-    file_path/
-        text.txt
-    ```
-    ### Example:
-    ```python
-    from src.data import MaskedLMDataset
-
-    dataset = MaskedLMDataset(file_path="/path/to/dataset/text.txt", tokenizer=tokenizer, max_seq_len=50)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32)
-    ``` 
-    """
     def __init__(self, file_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
         self.file_path = file_path
         self.max_seq_len = max_seq_len
