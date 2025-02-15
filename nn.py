@@ -86,7 +86,7 @@ class Embedding(nn.Module):
         super(Embedding, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        self.weight = nn.Parameter(torch.empty((num_embeddings, embedding_dim), ))
+        self.weight = nn.Parameter(torch.empty(num_embeddings, embedding_dim))
         self._initialize_weights()
 
     def _initialize_weights(self):
@@ -113,7 +113,7 @@ class PositionalEmbeddings(nn.Module):
 
     def forward(self, X:torch.Tensor)->torch.Tensor:
         w_embedding = self.word_encoding(X)
-        positions = torch.arange(X.shape[1]).unsqueeze(0).to(self.device)
+        positions = torch.arange(X.shape[1]).unsqueeze(0).to(X.device)
         p_embedding = self.position_encoding(positions)
         embeddings = w_embedding + p_embedding
         return self.relu(self.dropout(embeddings))
@@ -126,10 +126,10 @@ class TransformerMultiheadAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-        self.q_proj = Linear(hidden_size, hidden_size, bias=False, )
-        self.k_proj = Linear(hidden_size, hidden_size, bias=False, )
-        self.v_proj = Linear(hidden_size, hidden_size, bias=False, )
-        self.out_proj = Linear(hidden_size,hidden_size, bias=True, )
+        self.q_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = Linear(hidden_size,hidden_size, bias=True)
         self.softmax = Softmax(dim=-1)
 
     def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
@@ -153,8 +153,8 @@ class LayerNormalization(nn.Module):
     def __init__(self, hidden_size:int, epsilon:float=1e-5) -> None:
         super(LayerNormalization, self).__init__()
         self.epsilon = epsilon
-        self.gamma = nn.Parameter(torch.empty(hidden_size, ))
-        self.beta = nn.Parameter(torch.empty(hidden_size, ))
+        self.gamma = nn.Parameter(torch.empty(hidden_size))
+        self.beta = nn.Parameter(torch.empty(hidden_size))
         
     def forward(self, X:torch.Tensor)->torch.Tensor:
         mean = X.mean(dim=-1, keepdim=True)
@@ -172,10 +172,10 @@ class FeedForward(torch.nn.Module):
     
     def net(self, X: torch.Tensor) -> torch.Tensor:
         net =  nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size, device=self.device),
+            Linear(self.hidden_size, self.intermediate_size),
             ReLU(),
             Dropout(self.dropout),
-            Linear(self.intermediate_size, self.hidden_size, device=self.device),
+            Linear(self.intermediate_size, self.hidden_size),
             Dropout(self.dropout)
         )
         return net(X)
@@ -202,7 +202,7 @@ class TransformerDecoderBlock(nn.Module):
 class TransformerEncoderBlock(TransformerDecoderBlock):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerEncoderBlock, self).__init__(hidden_size, num_heads, norm_epsilon, dropout)
-        self.mha = TransformerMultiheadAttention(hidden_size, num_heads, )
+        self.mha = TransformerMultiheadAttention(hidden_size, num_heads)
 
     def forward(self, X: torch.Tensor, paddding_mask: torch.Tensor = None) -> torch.Tensor:
         attention = self.mha(X, X, X, paddding_mask)
@@ -227,25 +227,14 @@ class RMSNormalization(nn.Module):
         return norm
     
 
-class LlamaFeedForward(torch.nn.Module):
-    def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
-        super(LlamaFeedForward, self).__init__()
-        self.hidden_size = hidden_size
-        self.intermediate_size = intermediate_size
-        self.dropout = dropout
-    
+class LlamaFeedForward(FeedForward):
     def net(self, X: torch.Tensor) -> torch.Tensor:
-        net =  nn.Sequential(
-            Linear(self.hidden_size, self.intermediate_size, device=self.device),
+        net = nn.Sequential(
+            Linear(self.hidden_size, self.intermediate_size),
             SiLU(),
-            Dropout(self.dropout),
-            Linear(self.intermediate_size, self.hidden_size, device=self.device),
-            Dropout(self.dropout)
+            Linear(self.intermediate_size, self.hidden_size)
         )
         return net(X)
-
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return self.net(X)
 
 
 class LlamaAttention(torch.nn.Module):
@@ -273,7 +262,6 @@ class LlamaAttention(torch.nn.Module):
             key=K.transpose(1, 2),
             position_ids=position_ids,
             dim=self.head_dim,
-            device=X.device
         )
         Q = q_rotated.transpose(1, 2)  # Back to (batch, num_heads, seq_len, head_dim)
         K = k_rotated.transpose(1, 2)
@@ -289,12 +277,13 @@ class LlamaAttention(torch.nn.Module):
     
     @staticmethod
     def apply_rope(query: torch.Tensor, key: torch.Tensor, 
-        position_ids: torch.Tensor, dim: int, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
+        position_ids: torch.Tensor, dim: int) -> Tuple[torch.Tensor, torch.Tensor]:
         dtype = query.dtype
+        position_ids = position_ids.to(query.device)
         # Split dimensions into two halves for rotation
         (q1, q2), (k1, k2) = query.chunk(2, dim=-1), key.chunk(2, dim=-1)
         # Compute theta values (corrected with 2 * j / dim)
-        j = torch.arange(0, dim // 2, dtype=dtype, device=device)
+        j = torch.arange(0, dim // 2, dtype=dtype, device=query.device)
         theta = 1.0 / (10000 ** (2 * j / dim))  # (dim//2,)
         # Position angles (outer product of position_ids and theta)
         angles = position_ids[:, None].float() * theta[None, :]  # (seq_len, dim//2)
@@ -344,7 +333,7 @@ class PatchEmbedding(nn.Module):
             in_channels=in_channels,
             out_channels=embed_dim,
             kernel_size=patch_size,
-            stride=patch_size,
+            stride=patch_size
         )
         self.flatten = nn.Flatten(2, 3)
 
