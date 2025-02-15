@@ -40,7 +40,7 @@ class BertModel(torch.nn.Module):
     def _make_attention_mask(self, X: torch.Tensor) -> torch.Tensor:
         # Create mask from input tokens (assumes token id 0 is padding)
         mask = (X != 0).unsqueeze(1).unsqueeze(1)  # (B, 1, 1, L)
-        return mask
+        return mask.to(X.device)
 
     def forward(self, X: torch.Tensor, return_last_state: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
