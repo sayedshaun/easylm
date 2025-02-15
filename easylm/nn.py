@@ -11,24 +11,17 @@ class Linear(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self._bias = bias
-        
         self.weights = nn.Parameter(torch.empty((out_features, in_features)))
-        
         if self._bias:
             self.bias = nn.Parameter(torch.empty(out_features))
         else:
             self.register_parameter('bias', None)
+        self._initialize_weights()
 
-        self.reset_parameters()  # Correct method name is usually plural
-
-    def reset_parameters(self):
-        # Example initialization using Kaiming Uniform
-        nn.init.kaiming_uniform_(self.weights, a=math.sqrt(5))
-        if self._bias:
-            # Calculate fan_in for proper bias initialization
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weights)
-            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-            nn.init.uniform_(self.bias, -bound, bound)
+    def _initialize_weights(self):
+        nn.init.xavier_uniform_(self.weight)
+        if self._bias is not None:
+            nn.init.zeros_(self.bias)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         if self._bias:
@@ -90,7 +83,7 @@ class Embedding(nn.Module):
         self._initialize_weights()
 
     def _initialize_weights(self):
-        nn.init.normal_(self.weight, mean=0, std=1)
+        nn.init.xavier_uniform_(self.weight)
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         if X.dtype != torch.long:
