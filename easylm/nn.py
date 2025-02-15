@@ -104,7 +104,7 @@ class PositionalEmbeddings(nn.Module):
 
     def forward(self, X:torch.Tensor)->torch.Tensor:
         w_embedding = self.word_encoding(X)
-        positions = torch.arange(X.shape[1]).unsqueeze(0).to(self.device)
+        positions = torch.arange(X.shape[1]).unsqueeze(0).to(X.device)
         p_embedding = self.position_encoding(positions)
         embeddings = w_embedding + p_embedding
         return self.relu(self.dropout(embeddings))
