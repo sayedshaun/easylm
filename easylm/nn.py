@@ -239,9 +239,6 @@ class LlamaFeedForward(torch.nn.Module):
         X = self.fc2(X)
         return X
 
-    def forward(self, X: torch.Tensor) -> torch.Tensor:
-        return self.net(X)
-
 
 class LlamaAttention(torch.nn.Module):
     def __init__(self, hidden_size: int, num_heads: int) -> None:
