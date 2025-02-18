@@ -2,7 +2,7 @@ from typing import Union
 import torch
 from torch import nn
 from easylm.config import GPTConfig
-from easylm.data import Tokenizer
+from easylm.tokenizer import Tokenizer
 from easylm.nn import Linear, TransformerDecoderBlock, PositionalEmbeddings
 
 
@@ -37,7 +37,8 @@ class GPTModel(nn.Module):
         return logits
     
     def _make_causal_mask(self, X: torch.Tensor)-> torch.Tensor:
-        mask = torch.tril(torch.ones(X.shape[1], X.shape[1], device=X.device))
+        N, S = X.shape # batch, seq_len
+        mask = torch.ones(S, S, dtype=torch.bool).tril(diagonal=0)
         return mask
 
     def generate(self, input_ids: torch.Tensor, eos_token_id: int, max_length: int = 50) -> torch.Tensor:
@@ -45,9 +46,9 @@ class GPTModel(nn.Module):
         with torch.no_grad():
             generated = input_ids.clone()
             for _ in range(max_length):
-                logits = self(generated) # Get model output: shape (batch_size, seq_len, vocab_size)
-                next_token_logits = logits[:, -1, :] # Focus on the last token's logits
-                next_token = next_token_logits.argmax(dim=-1, keepdim=True) # Greedy decoding: choose token with highest probability
+                logits = self(generated) # (batch_size, seq_len, vocab_size)
+                next_token_logits = logits[:, -1, :] # last token's logits
+                next_token = next_token_logits.argmax(dim=-1, keepdim=True) # Greedy decoding
                 generated = torch.cat([generated, next_token], dim=1) # Append new token to sequence
                 if next_token == eos_token_id:
                     break
