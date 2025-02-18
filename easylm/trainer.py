@@ -3,10 +3,11 @@ import torch
 from tqdm import tqdm
 from typing import Union
 import torch.nn.functional as F
-from torch.amp import autocast, GradScaler
-from torch.utils.data import DataLoader, Dataset
-
+from torch.utils.data import Dataset
 from easylm.model.bert import BertModel
+from torch.amp import autocast, GradScaler
+from easylm.data.dataloader import DataLoader
+
 
 class Trainer:
     def __init__(self, config: object) -> None:
@@ -73,7 +74,6 @@ class Trainer:
                     print(
                         f"Epoch: {epoch}, Global Step: {global_step}, "
                         f"Train Loss: {loss.item():.4f}, "
-                        f"Learning Rate: {self.learning_rate:.4f}"
                     )
                 
                 if (global_step % self.validation_steps == 0 
@@ -93,7 +93,10 @@ class Trainer:
 
 
     @staticmethod        
-    def train_step(model: torch.nn.Module, batch, device:torch.device):
+    def train_step(
+        model: torch.nn.Module, 
+        batch, 
+        device: Union[torch.device, str] = torch.device):
         inputs, targets = batch
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -107,7 +110,10 @@ class Trainer:
     
 
     @staticmethod
-    def validation_step(model: torch.nn.Module, batch, device:torch.device):
+    def validation_step(
+        model: torch.nn.Module, 
+        batch, 
+        device: Union[torch.device, str] = torch.device):
         inputs, targets = batch
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -133,6 +139,5 @@ class Trainer:
         if isinstance(dataset, Dataset):
             return DataLoader(dataset, batch_size=self.batch_size)
         return dataset
-
 
 __all__ = ["Trainer"]
