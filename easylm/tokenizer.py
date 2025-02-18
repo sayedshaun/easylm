@@ -18,6 +18,8 @@ class TextLoader(ABC):
 
     @staticmethod
     def load_data_from_dir(dir_path: str) -> str:
+        if not os.path.isdir(dir_path):
+            raise FileNotFoundError(f"Directory not found: {dir_path}")
         txt_files = [
             os.path.join(dir_path, file)
             for file in os.listdir(dir_path)
@@ -29,6 +31,8 @@ class TextLoader(ABC):
 
     @staticmethod
     def load_data(file_path: str) -> str:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
         if not os.path.isfile(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
         return file_path
@@ -82,23 +86,15 @@ class Tokenizer(TextLoader):
             add_dummy_prefix=False
         )
 
-    def encode(self, text: str, return_tensors: str = "pt") -> Union[List[int], torch.Tensor, np.ndarray]:
+    def encode(self, text: str) -> torch.Tensor:
         if not isinstance(text, str):
             raise TypeError(f"Expected str, got {type(text)}")
-        # If text is somehow a tensor, convert it to a list.
         if isinstance(text, torch.Tensor):
             text = text.tolist()
         encoded = self.processor.encode(text, out_type=int)
-        if return_tensors == "np":
-            return np.array(encoded)
-        elif return_tensors == "list":
-            return encoded
-        elif return_tensors == "pt":
-            return torch.tensor(encoded)
-        else:
-            raise ValueError("return_tensors must be one of ['np', 'list', 'pt'].")
+        return torch.tensor(encoded, dtype=torch.long).unsqueeze(0)
 
-    def decode(self, tokens: Optional[Union[List[int], torch.Tensor]]) -> str:
+    def decode(self, tokens: Union[Union[List[int], torch.Tensor, np.ndarray]]) -> str:
         if isinstance(tokens, torch.Tensor):
             tokens = tokens.tolist()
         return self.processor.decode(tokens)
