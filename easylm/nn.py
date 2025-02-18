@@ -124,7 +124,7 @@ class TransformerMultiheadAttention(nn.Module):
         self.v_proj = Linear(hidden_size, hidden_size, bias=False)
         self.out_proj = Linear(hidden_size,hidden_size, bias=True)
 
-    def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask:torch.Tensor=None)->torch.Tensor:
+    def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask: Union[torch.Tensor, None]=None)->torch.Tensor:
         N, L, D = Q.shape
         Q, K, V = self.q_proj(Q), self.k_proj(K), self.v_proj(V)
         Q = Q.view(N, L, self.num_heads, self.head_dim).transpose(1, 2)
@@ -145,8 +145,13 @@ class LayerNorm(nn.Module):
     def __init__(self, hidden_size:int, epsilon:float=1e-5) -> None:
         super(LayerNorm, self).__init__()
         self.epsilon = epsilon
-        self.gamma = nn.Parameter(torch.empty(hidden_size, ))
-        self.beta = nn.Parameter(torch.empty(hidden_size, ))
+        self.gamma = nn.Parameter(torch.empty(hidden_size))
+        self.beta = nn.Parameter(torch.empty(hidden_size))
+        self._init_weights()
+
+    def _init_weights(self):
+        nn.init.ones_(self.gamma)
+        nn.init.zeros_(self.beta)
         
     def forward(self, X:torch.Tensor)->torch.Tensor:
         mean = X.mean(dim=-1, keepdim=True)
