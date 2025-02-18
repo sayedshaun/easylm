@@ -1,18 +1,19 @@
 import torch
 from dataclasses import dataclass
-from typing import Union
+from typing import Union, NamedTuple
 from torch.utils.data import DataLoader, Dataset
 
 
 @dataclass
 class GPTConfig:
     vocab_size: Union[int, None] = None
-    hidden_size: Union[int, None] = None
-    num_heads: Union[int, None] = None
-    num_layers: Union[int, None] = None
-    norm_epsilon: Union[float, None] = None
-    dropout: Union[float, None] = None
-    max_seq_len: Union[int, None] = None
+    hidden_size: Union[int, None] = 768
+    num_heads: Union[int, None] = 12
+    num_layers: Union[int, None] = 12
+    norm_epsilon: Union[float, None] = 1e-5 
+    dropout: Union[float, None] = 0.1
+    max_seq_len: Union[int, None] = 512
+
 
 @dataclass
 class LlamaConfig:
@@ -20,12 +21,13 @@ class LlamaConfig:
     hidden_size: Union[int, None] = None
     num_heads: Union[int, None] = None
     num_layers: Union[int, None] = None
-    norm_epsilon: Union[float, None] = None
-    dropout: Union[float, None] = None
-    max_seq_len: Union[int, None] = None
+    norm_epsilon: Union[float, None] = 1e-5
+    dropout: Union[float, None] = 0.1
+    max_seq_len: Union[int, None] = 512
+
 
 @dataclass
-class BERTConfig:
+class BertConfig:
     vocab_size: Union[int, None] = None
     hidden_size: Union[int, None] = None
     num_heads: Union[int, None] = None
@@ -68,4 +70,4 @@ class TrainingConfig:
 
 
 
-__all__ = ["GPTConfig", "LlamaConfig", "BERTConfig", "VITConfig", "TrainingConfig"]
+__all__ = ["GPTConfig", "LlamaConfig", "BertConfig", "VITConfig", "TrainingConfig"]
