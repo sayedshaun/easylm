@@ -16,14 +16,14 @@ torch.manual_seed(42)
 
 class Document(ABC):
 
-    def load(self, file_path: str, tokenizer) -> list:
-        if os.path.isdir(file_path):
-            return self.load_data_from_dir(file_path, tokenizer)
+    def load(self, dir_or_path: str, tokenizer: Tokenizer) -> list:
+        if os.path.isdir(dir_or_path):
+            return Document.load_data_from_dir(dir_or_path, tokenizer)
         else:
-            return self.load_data(file_path, tokenizer)
+            return Document.load_data(dir_or_path, tokenizer)
             
     @staticmethod
-    def load_data_from_dir(self, dir_path: str, tokenizer) -> list:
+    def load_data_from_dir(dir_path: str, tokenizer) -> list:
         all_text = ""
         for file in os.listdir(dir_path):
             if file.endswith(".txt"):
@@ -33,7 +33,7 @@ class Document(ABC):
         return tokenizer.encode(all_text)
 
     @staticmethod
-    def load_data(self, file_path: str, tokenizer) -> list:
+    def load_data(file_path: str, tokenizer) -> list:
         with open(file_path, "r", encoding="utf-8") as file:
             text = file.read()
         return tokenizer.encode(text)
