@@ -47,7 +47,7 @@ class LlamaModel(nn.Module):
         with torch.no_grad():
             generated = input_ids.clone()
             for _ in range(max_length):
-                logits = self(generated) # (batch_size, seq_len, vocab_size)
+                logits = self(generated, causal_mask=False) # (batch_size, seq_len, vocab_size)
                 next_token_logits = logits[:, -1, :] # last token's logits
                 next_token = next_token_logits.argmax(dim=-1, keepdim=True) # Greedy decoding
                 generated = torch.cat([generated, next_token], dim=1) # Append new token to sequence
