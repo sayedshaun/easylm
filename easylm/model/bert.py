@@ -1,6 +1,6 @@
 from typing import Tuple, Union
 import torch
-from easylm.config import BERTConfig
+from easylm.config import BertConfig
 from easylm.nn import (
     PositionalEmbeddings, 
     TransformerEncoderBlock, 
@@ -11,7 +11,7 @@ from easylm.nn import (
 
 
 class BertModel(torch.nn.Module):
-    def __init__(self, config: BERTConfig) -> None:
+    def __init__(self, config: BertConfig) -> None:
         super(BertModel, self).__init__()
         # Embedding layer (includes token and positional embeddings)
         self.embedding = PositionalEmbeddings(
