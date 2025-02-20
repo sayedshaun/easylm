@@ -13,6 +13,7 @@ from easylm.nn import (
 class BertModel(torch.nn.Module):
     def __init__(self, config: BertConfig) -> None:
         super(BertModel, self).__init__()
+        self.config = config
         # Embedding layer (includes token and positional embeddings)
         self.embedding = PositionalEmbeddings(
             vocab_size=config.vocab_size,
