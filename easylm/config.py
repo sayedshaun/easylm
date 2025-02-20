@@ -1,6 +1,7 @@
 import torch
 from dataclasses import dataclass
 from typing import Union, NamedTuple
+from easylm.tokenizer import Tokenizer
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -61,12 +62,11 @@ class TrainingConfig:
     device: Union[str, torch.device, None] = None
     gradient_accumulation_steps: Union[int, None] = 1
     gradient_clipping: Union[float, None] = 1
-    precision: Union[str, None] = torch.float16
+    precision: str = "fp32"
     seed: Union[int, None] = 42
     validation_steps: Union[int, None] = 500
     logging_steps: Union[int, None] = 500
     save_steps: Union[int, None] = 500
-    optimizer: Union[torch.optim.Optimizer, None] = None
 
 
 
