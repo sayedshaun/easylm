@@ -20,14 +20,14 @@ pip install git+https://github.com/sayedshaun/easylm.git
 
 ```python
 from easylm.model import LlamaModel
-from easylm.data import CauslLMDataset
+from easylm.data import CausalLMDataset
 from easylm.tokenizer import Tokenizer
 from easylm.config import TrainingConfig, LlamaConfig
 from easylm.trainer import Trainer
 
 data_path = "data"
 tokenizer = Tokenizer(data_path, vocab_size=5000)
-dataset = CauslLMDataset(data_path, tokenizer, max_seq_len=50)
+dataset = CausalLMDataset(data_path, tokenizer, max_seq_len=50)
 model = LlamaModel(
     LlamaConfig(
         vocab_size=tokenizer.vocab_size,

@@ -37,7 +37,7 @@ class Document(ABC):
         return text
     
 
-class CauslLMDataset(torch.utils.data.Dataset, Document):
+class CausalLMDataset(torch.utils.data.Dataset, Document):
     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
         self.max_seq_len = max_seq_len
         data = self.load(dir_or_path)
@@ -189,7 +189,7 @@ class ImageClassificationDataset(torch.utils.data.Dataset):
 
 
 __all__ = [
-    "CauslLMDataset",
+    "CausalLMDataset",
     "MaskedLMDataset",
     "ImageClassificationDataset",
 ]
