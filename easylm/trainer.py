@@ -8,7 +8,8 @@ from torch.utils.data import Dataset
 import yaml
 from easylm.model.bert import BertModel
 from torch.amp import autocast, GradScaler
-from easylm.data.dataloader import DataLoader
+#from easylm.data.dataloader import DataLoader
+from torch.utils.data import DataLoader
 from easylm.config import TrainingConfig
 from easylm.model.gpt import GPTModel
 from easylm.model.llama import LlamaModel
