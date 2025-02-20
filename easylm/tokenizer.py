@@ -1,4 +1,5 @@
 import os
+import shutil
 from typing import List, Optional, Union
 import warnings
 import numpy as np
@@ -39,6 +40,14 @@ class TextLoader(ABC):
 
 
 class Tokenizer(TextLoader):
+    mask_token: str = "[MASK]"
+    cls_token: str = "[CLS]" 
+    sep_token: str = "[SEP]"
+    pad_token: str = "[PAD]"
+    unk_token: str = "[UNK]"
+    sos_token: str = "[SOS]"
+    eos_token: str = "[EOS]"
+
     def __init__(
         self,
         dir_or_path: str,
@@ -54,7 +63,15 @@ class Tokenizer(TextLoader):
         self._model_path = os.path.join(self._tokenizer_dir, f"{self._model_prefix}.model")
 
         # Set default special tokens.
-        self.special_tokens = ["[MASK]", "[CLS]", "[SEP]", "[PAD]", "[UNK]", "[SOS]", "[EOS]"]
+        self.special_tokens = [
+            Tokenizer.mask_token,
+            Tokenizer.cls_token,
+            Tokenizer.sep_token,
+            Tokenizer.pad_token,
+            Tokenizer.unk_token,
+            Tokenizer.sos_token,
+            Tokenizer.eos_token
+        ]
         if add_special_tokens:
             warnings.warn("You must retrain the model after adding special tokens.")
             self.special_tokens.extend(add_special_tokens)
@@ -69,13 +86,13 @@ class Tokenizer(TextLoader):
 
         # Load the SentencePiece model.
         self.processor = SentencePieceProcessor(model_file=self._model_path)
-        self.mask_token_id = self.encode("[MASK]")
-        self.cls_token_id = self.encode("[CLS]")
-        self.sep_token_id = self.encode("[SEP]")
-        self.pad_token_id = self.encode("[PAD]")
-        self.unk_token_id = self.encode("[UNK]")
-        self.sos_token_id = self.encode("[SOS]")
-        self.eos_token_id = self.encode("[EOS]") 
+        self.mask_token_id = self.encode(Tokenizer.mask_token)
+        self.cls_token_id = self.encode(Tokenizer.cls_token)
+        self.sep_token_id = self.encode(Tokenizer.sep_token)
+        self.pad_token_id = self.encode(Tokenizer.pad_token)
+        self.unk_token_id = self.encode(Tokenizer.unk_token)
+        self.sos_token_id = self.encode(Tokenizer.sos_token)
+        self.eos_token_id = self.encode(Tokenizer.cls_token) 
 
     def _train_model(self) -> None:
         spm.SentencePieceTrainer.Train(
@@ -89,10 +106,8 @@ class Tokenizer(TextLoader):
     def encode(self, text: str) -> torch.Tensor:
         if not isinstance(text, str):
             raise TypeError(f"Expected str, got {type(text)}")
-        if isinstance(text, torch.Tensor):
-            text = text.tolist()
         encoded = self.processor.encode(text, out_type=int)
-        return torch.tensor(encoded, dtype=torch.long).unsqueeze(0)
+        return torch.tensor(encoded).unsqueeze(0)
 
     def decode(self, tokens: Union[Union[List[int], torch.Tensor, np.ndarray]]) -> str:
         if isinstance(tokens, torch.Tensor):
@@ -101,6 +116,50 @@ class Tokenizer(TextLoader):
 
     def __len__(self) -> int:
         return self.processor.get_piece_size()
+    
+    def save(self, path: str) -> None:
+        shutil.copy(self._model_path, path)
+
+    @classmethod
+    def from_pretrained(cls, pretrained_path: str) -> "Tokenizer":
+        model_path = os.path.join(pretrained_path, "VOCAB.model")
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Pretrained model not found at: {model_path}")
+        
+        # Create an uninitialized instance of Tokenizer.
+        tokenizer = Tokenizer.__new__(Tokenizer)
+        
+        # Set the necessary attributes.
+        tokenizer._tokenizer_dir = pretrained_path
+        tokenizer._model_path = model_path
+        tokenizer.vocab_size = None  # or set an appropriate default if needed
+        tokenizer.special_tokens = [
+            Tokenizer.mask_token,
+            Tokenizer.cls_token,
+            Tokenizer.sep_token,
+            Tokenizer.pad_token,
+            Tokenizer.unk_token,
+            Tokenizer.sos_token,
+            Tokenizer.eos_token
+        ]
+        
+        # Load the pretrained SentencePiece model.
+        tokenizer.processor = SentencePieceProcessor(model_file=model_path)
+        
+        # Setup token ids.
+        tokenizer.mask_token_id = tokenizer.encode(Tokenizer.mask_token)
+        tokenizer.cls_token_id = tokenizer.encode(Tokenizer.cls_token)
+        tokenizer.sep_token_id = tokenizer.encode(Tokenizer.sep_token)
+        tokenizer.pad_token_id = tokenizer.encode(Tokenizer.pad_token)
+        tokenizer.unk_token_id = tokenizer.encode(Tokenizer.unk_token)
+        tokenizer.sos_token_id = tokenizer.encode(Tokenizer.sos_token)
+        tokenizer.eos_token_id = tokenizer.encode(Tokenizer.eos_token)
+        
+        return tokenizer
+
+
+
+        
 
 
 __all__ = ["Tokenizer"]
@@ -109,3 +168,4 @@ __all__ = ["Tokenizer"]
 if __name__ == "__main__":
     tokenizer = Tokenizer(dir_or_path="data", vocab_size=1000)
     print(tokenizer.encode("Hello, world!"))
+    tokenizer.save("pretrained_model")
