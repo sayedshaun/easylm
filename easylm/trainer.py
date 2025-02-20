@@ -43,6 +43,9 @@ class Trainer:
         self.logging_steps = config.logging_steps
         self.validation_steps = config.validation_steps
         self.save_steps = config.save_steps
+        self.num_workers = config.num_workers
+        self.shuffle_train_data = config.shuffle_train_data
+        self.pin_memory = config.pin_memory
         self.scaler = GradScaler(device=self.device)
         self.enable_amp = True if torch.cuda.is_available() else False
 
@@ -169,7 +172,13 @@ class Trainer:
 
     def dataloader(self, dataset: Union[Dataset, DataLoader]) -> DataLoader:
         if isinstance(dataset, Dataset):
-            return DataLoader(dataset, batch_size=self.batch_size)
+            return DataLoader(
+                dataset=dataset, 
+                batch_size=self.batch_size, 
+                num_workers=self.num_workers, 
+                shuffle=self.shuffle_train_data,
+                pin_memory=self.pin_memory
+            )
         return dataset
 
     def save(self):
