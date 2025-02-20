@@ -5,7 +5,6 @@ from abc import ABC
 import numpy as np
 from PIL import Image
 from torchvision import transforms
-import torch.utils.data
 import torchvision
 from easylm.tokenizer import Tokenizer
 from typing import List, Optional, Tuple, Generator, Union
@@ -15,62 +14,34 @@ torch.manual_seed(42)
 
 
 class Document(ABC):
-
-    def load(self, dir_or_path: str, tokenizer: Tokenizer) -> list:
+    def load(self, dir_or_path: str) -> list:
         if os.path.isdir(dir_or_path):
-            return Document.load_data_from_dir(dir_or_path, tokenizer)
+            return Document.load_data_from_dir(dir_or_path)
         else:
-            return Document.load_data(dir_or_path, tokenizer)
+            return Document.load_data(dir_or_path)
             
     @staticmethod
-    def load_data_from_dir(dir_path: str, tokenizer) -> list:
+    def load_data_from_dir(dir_path: str) -> list:
         all_text = ""
         for file in os.listdir(dir_path):
             if file.endswith(".txt"):
                 full_path = os.path.join(dir_path, file)
                 with open(full_path, "r", encoding="utf-8") as f:
                     all_text += f.read() + "\n\n"  # Adding a newline as a separator
-        return tokenizer.encode(all_text)
+        return all_text
 
     @staticmethod
-    def load_data(file_path: str, tokenizer) -> list:
+    def load_data(file_path: str) -> list:
         with open(file_path, "r", encoding="utf-8") as file:
             text = file.read()
-        return tokenizer.encode(text)
-
-
-class IterableDocument(ABC):
-    def load(self, file_path: str, tokenizer, chunk_size: int = 10000) -> Generator[list, None, None]:
-        if os.path.isdir(file_path):
-            return self.load_data_from_dir(file_path, tokenizer, chunk_size)
-        else:
-            return self.load_data(file_path, tokenizer, chunk_size)
-            
-    @staticmethod
-    def load_data(file_path: str, tokenizer, chunk_size: int = 10000) -> Generator[list, None, None]:
-        with open(file_path, "r", encoding="utf-8") as file:
-            texts = ""
-            for line in file:
-                texts += line
-                if len(texts) >= chunk_size:
-                    yield tokenizer.encode(texts)
-                    texts = ""
-            # Yield any remaining text
-            if texts:
-                yield tokenizer.encode(texts)
-
-    @staticmethod
-    def load_data_from_dir(dir_path: str, tokenizer, chunk_size: int = 10000) -> Generator[list, None, None]:
-        for file in os.listdir(dir_path):
-            if file.endswith(".txt"):
-                full_path = os.path.join(dir_path, file)
-                yield from IterableDocument.load_data(full_path, tokenizer, chunk_size)
+        return text
     
 
-class NextWordPredictDataset(torch.utils.data.Dataset, Document):
+class CauslLMDataset(torch.utils.data.Dataset, Document):
     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
         self.max_seq_len = max_seq_len
-        self.data = self.load(dir_or_path, tokenizer)
+        data = self.load(dir_or_path)
+        self.data = tokenizer.encode(data).tolist()[0]
 
     def __len__(self) -> int:
         return len(self.data) - self.max_seq_len
@@ -78,10 +49,7 @@ class NextWordPredictDataset(torch.utils.data.Dataset, Document):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         block = self.data[idx: idx + self.max_seq_len + 1]
         input_ids, target_ids = block[:-1], block[1:]
-        return (
-            torch.tensor(input_ids, dtype=torch.long), 
-            torch.tensor(target_ids, dtype=torch.long)
-        )
+        return torch.tensor(input_ids), torch.tensor(target_ids)
 
 
 class MaskedLMDataset(torch.utils.data.Dataset, Document):
@@ -221,7 +189,7 @@ class ImageClassificationDataset(torch.utils.data.Dataset):
 
 
 __all__ = [
-    "NextWordPredictDataset",
+    "CauslLMDataset",
     "MaskedLMDataset",
     "ImageClassificationDataset",
 ]
