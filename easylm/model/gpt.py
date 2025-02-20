@@ -9,6 +9,7 @@ from easylm.nn import Linear, TransformerDecoderBlock, PositionalEmbeddings
 class GPTModel(nn.Module):
     def __init__(self, config: GPTConfig) -> None: 
         super(GPTModel, self).__init__()
+        self.config = config
         self.embedding = PositionalEmbeddings(
             config.vocab_size, 
             config.hidden_size, 
