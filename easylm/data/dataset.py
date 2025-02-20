@@ -245,11 +245,3 @@ class ImageClassificationDataset(torch.utils.data.Dataset):
         image = Image.open(img_path).convert("RGB")
         image = self.transform_image(image)
         return image, torch.tensor(label, dtype=torch.long)
-    
-
-
-__all__ = [
-    "CausalLMDataset",
-    "MaskedLMDataset",
-    "ImageClassificationDataset",
-]
