@@ -182,7 +182,7 @@ class Trainer:
         return dataset
 
     def save(self):
-        torch.save(self.model.state_dict(), f"{self.pretrained_path}/pytorch_moddel.bin")
+        torch.save(self.model.state_dict(), f"{self.pretrained_path}/pytorch_model.bin")
 
 
     def predict(self, text: Union[str, None], max_seq_len: Union[int, None] = None) -> str:
