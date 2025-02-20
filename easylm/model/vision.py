@@ -12,6 +12,7 @@ from easylm.nn import (
 class VisionTransformer(torch.nn.Module):
     def __init__(self, config: VITConfig) -> None:
         super(VisionTransformer, self).__init__()
+        self.config = config
         self.patch_embed = PatchEmbedding(
             img_size=config.image_size,
             patch_size=config.patch_size,
