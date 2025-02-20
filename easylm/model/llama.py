@@ -42,11 +42,11 @@ class LlamaModel(nn.Module):
         mask = torch.tril(torch.ones(X.shape[1], X.shape[1], device=X.device))
         return mask
     
-    def generate(self, input_ids: torch.Tensor, eos_token_id: int, max_length: int = 50) -> torch.Tensor:
+    def generate(self, input_ids: torch.Tensor, eos_token_id: int, max_seq_len: int = 50) -> torch.Tensor:
         self.eval()
         with torch.no_grad():
             generated = input_ids.clone()
-            for _ in range(max_length):
+            for _ in range(max_seq_len):
                 logits = self(generated, causal_mask=False) # (batch_size, seq_len, vocab_size)
                 next_token_logits = logits[:, -1, :] # last token's logits
                 next_token = next_token_logits.argmax(dim=-1, keepdim=True) # Greedy decoding
@@ -56,4 +56,13 @@ class LlamaModel(nn.Module):
             return generated
 
 
-    
+    @staticmethod
+    def from_pretrained(preprained_path: str):
+        import yaml
+        with open(f"{preprained_path}/model_config.yaml", "r") as f:
+            config_dict = yaml.safe_load(f)
+        config = LlamaConfig(**config_dict)
+        model = LlamaModel(config)
+        model.load_state_dict(
+            torch.load(f"{preprained_path}/pytorch_model.bin", weights_only=True))
+        return model
