@@ -54,6 +54,7 @@ class Trainer:
 
         torch.manual_seed(self.seed) if self.seed is not None else None
         torch.cuda.manual_seed(self.seed) if self.seed is not None else None
+        assert self.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
 
         #===============================Precision==========================================================
         if config.precision == "fp16":
@@ -107,12 +108,9 @@ class Trainer:
         global_step = 1
         accumulated_loss = 0.0  # Track accumulated loss
         
-        for epoch in range(1, self.epochs + 1):
-            with tqdm(
-                self.train_data, 
-                desc=f"Training Epoch {epoch}", 
-                dynamic_ncols=True) as pbar:
-                for step, batch in enumerate(pbar, start=1):
+        with tqdm(total=self.epochs, desc="Training") as pbar:
+            for epoch in range(1, self.epochs + 1):
+                for batch in self.train_data:
                     with autocast(
                         device_type=self.device, 
                         dtype=self.precision, 
@@ -125,7 +123,7 @@ class Trainer:
                     self.scaler.scale(loss).backward()
 
                     # Perform optimization step only when accumulated steps reach the limit
-                    if (step % self.gradient_accumulation_steps == 0) or (step == 1):
+                    if (global_step % self.gradient_accumulation_steps == 0) or (global_step == 1):
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
                         self.scaler.step(self.optimizer)
                         self.scaler.update()
@@ -155,7 +153,8 @@ class Trainer:
                     # Save model
                     if global_step % self.save_steps == 0:
                         self.save()
-
+                  
+                pbar.update(1)
 
     @staticmethod        
     def train_step(
