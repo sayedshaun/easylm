@@ -116,7 +116,9 @@ class MaskedLMDataset(torch.utils.data.Dataset, Document):
     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
         self.mask_prob = mask_prob
         self.max_seq_len = max_seq_len
-        self.data = self.load(dir_or_path, tokenizer)
+        self.tokenizer = tokenizer
+        data = self.load(dir_or_path)
+        self.data = tokenizer.encode(data).tolist()[0]
 
     def __len__(self):
         # We subtract 2 because we will add [CLS] and [SEP] tokens.
