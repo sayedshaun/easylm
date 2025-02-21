@@ -1,5 +1,6 @@
 from typing import Tuple, Union
 import torch
+import torch.nn.functional as F
 from easylm.config import BertConfig
 from easylm.nn import (
     PositionalEmbeddings, 
@@ -8,6 +9,7 @@ from easylm.nn import (
     Dropout, 
     Linear
 )
+from easylm.utils import MaskedModelOutput
 
 
 class BertModel(torch.nn.Module):
@@ -38,12 +40,16 @@ class BertModel(torch.nn.Module):
         self.dropout = Dropout(config.dropout)
         self.linear = Linear(config.hidden_size, config.vocab_size)
 
-    def _make_attention_mask(self, X: torch.Tensor) -> torch.Tensor:
+    def _make_attention_mask(self, input_ids: torch.Tensor) -> torch.Tensor:
         # Create mask from input tokens (assumes token id 0 is padding)
-        mask = (X != 0).unsqueeze(1).unsqueeze(1)  # (B, 1, 1, L)
-        return mask.to(X.device)
+        mask = (input_ids != 0).unsqueeze(1).unsqueeze(1)  # (B, 1, 1, L)
+        return mask.to(input_ids.device)
 
-    def forward(self, X: torch.Tensor, return_last_state: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    def forward(
+            self, 
+            input_ids: torch.Tensor, 
+            target_ids: Union[torch.Tensor, None] = None, 
+            ) -> MaskedModelOutput:
         """
         Args:
             X (torch.Tensor): Input token IDs of shape (B, L). 
@@ -54,39 +60,40 @@ class BertModel(torch.nn.Module):
             pooled_output (torch.Tensor): Pooled output from the [CLS] token, shape (B, hidden_size)
         """
         # Create attention mask for the input tokens.
-        mask = self._make_attention_mask(X)  # (B, 1, 1, L)
+        mask = self._make_attention_mask(input_ids)  # (B, 1, 1, L)
 
         # Compute token embeddings.
-        X = self.embedding(X)  # (B, L, hidden_size)
-        batch_size = X.size(0)
+        input_ids = self.embedding(input_ids)  # (B, L, hidden_size)
+        batch_size = input_ids.size(0)
 
         # Expand the learnable [CLS] token to the batch dimension.
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # (B, 1, hidden_size)
 
         # Prepend the CLS token to the input embeddings.
-        X = torch.cat((cls_tokens, X), dim=1)  # (B, L+1, hidden_size)
+        input_ids = torch.cat((cls_tokens, input_ids), dim=1)  # (B, L+1, hidden_size)
 
         # Update the attention mask to include the CLS token (assumed valid, so mask value 1).
-        cls_mask = torch.ones(batch_size, 1, 1, 1, device=X.device, dtype=mask.dtype)
+        cls_mask = torch.ones(batch_size, 1, 1, 1, device=input_ids.device, dtype=mask.dtype)
         mask = torch.cat((cls_mask, mask), dim=-1)  # (B, 1, 1, L+1)
 
         # Pass the entire sequence (including the CLS token) through the transformer blocks.
         for block in self.blocks:
-            X = block(X, mask)
+            input_ids = block(input_ids, mask)
 
         # Apply normalization and dropout.
-        X = self.norm(X)
-        X = self.dropout(X)
+        input_ids = self.norm(input_ids)
+        input_ids = self.dropout(input_ids)
+        logits = self.linear(input_ids)  # (B, L+1, vocab_size)
+        pooled_output = torch.tanh(self.pooler(input_ids[:, 0, :]))  # (B, hidden_size)
 
-        # Compute logits over vocabulary for each token position.
-        logits = self.linear(X)  # (B, L+1, vocab_size)
+        if target_ids is not None:
+            # Remove the CLS token logits for computing the loss.
+            reshaped_logits = logits[:, 1:].reshape(-1, logits.shape[-1])  # (B * L, vocab_size)
+            loss = F.cross_entropy(reshaped_logits, target_ids.view(-1))
+            return MaskedModelOutput(loss=loss, logits=logits, pooler_output=pooled_output)
+        else:
+            return MaskedModelOutput(logits=logits, pooler_output=pooled_output)
 
-        # Pooler: take the hidden state corresponding to the first token ([CLS]),
-        # pass it through a linear layer and tanh activation.
-        pooled_output = torch.tanh(self.pooler(X[:, 0, :]))  # (B, hidden_size)
-        if return_last_state:
-            return logits, pooled_output
-        return logits
 
 
     @torch.no_grad()
@@ -101,7 +108,7 @@ class BertModel(torch.nn.Module):
         """
         # Run the forward pass which prepends the CLS token
         self.eval()
-        logits = self.forward(input_ids)  # shape: (B, L+1, vocab_size)
-        
+        outputs = self.forward(input_ids)  # shape: (B, L+1, vocab_size)
+        logits = outputs.logits
         # Remove the logits for the [CLS] token (first token)
         return logits[:, 1:, :]
