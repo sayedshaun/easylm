@@ -1,11 +1,11 @@
-from dataclasses import asdict
 import os
+import yaml
 import torch
 from tqdm import tqdm
 from typing import Union
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-import yaml
+from dataclasses import asdict
 from easylm.model.bert import BertModel
 from torch.amp import autocast, GradScaler
 #from easylm.data.dataloader import DataLoader
@@ -52,8 +52,8 @@ class Trainer:
         self.scaler = GradScaler(device=self.device)
         self.enable_amp = True if torch.cuda.is_available() else False
 
-        torch.manual_seed(self.seed)
-        torch.cuda.manual_seed(self.seed)
+        torch.manual_seed(self.seed) if self.seed is not None else None
+        torch.cuda.manual_seed(self.seed) if self.seed is not None else None
 
         #===============================Precision==========================================================
         if config.precision == "fp16":
@@ -108,14 +108,18 @@ class Trainer:
         accumulated_loss = 0.0  # Track accumulated loss
         
         for epoch in range(1, self.epochs + 1):
-            with tqdm(self.train_data, desc=f"Training Epoch {epoch}", dynamic_ncols=True) as pbar:
+            with tqdm(
+                self.train_data, 
+                desc=f"Training Epoch {epoch}", 
+                dynamic_ncols=True) as pbar:
                 for step, batch in enumerate(pbar, start=1):
                     with autocast(
                         device_type=self.device, 
                         dtype=self.precision, 
                         enabled=self.enable_amp
                         ):
-                        loss = self.train_step(self.model, batch, self.device) / self.gradient_accumulation_steps
+                        loss = self.train_step(self.model, batch, self.device)
+                        loss = loss / self.gradient_accumulation_steps
                     
                     accumulated_loss += loss.item()
                     self.scaler.scale(loss).backward()
@@ -135,9 +139,13 @@ class Trainer:
                             self.logs["train_loss"].append(avg_loss)
                             self.logs["global_step"] = global_step
                             self.logs["epoch"] = epoch
-                            pbar.set_postfix(step=global_step, loss=f"{avg_loss:.4f}", best_loss=f"{self.logs['best_loss']:.4f}")
+                            pbar.set_postfix(
+                                step=global_step, 
+                                loss=f"{avg_loss:.4f}", 
+                                best_loss=f"{self.logs['best_loss']:.4f}"
+                                )
 
-                        global_step += 1
+                    global_step += 1
 
                     # Validation
                     if global_step % self.validation_steps == 0 and self.val_data is not None:
@@ -153,7 +161,8 @@ class Trainer:
     def train_step(
         model: torch.nn.Module, 
         batch, 
-        device: Union[torch.device, str] = torch.device):
+        device: Union[torch.device, str] = torch.device
+        ) ->torch.FloatTensor:
         inputs, targets = batch
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -166,7 +175,8 @@ class Trainer:
     def validation_step(
         model: torch.nn.Module, 
         batch, 
-        device: Union[torch.device, str] = torch.device):
+        device: Union[torch.device, str] = torch.device
+        ) ->torch.FloatTensor:
         inputs, targets = batch
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -174,11 +184,15 @@ class Trainer:
         return outputs.loss
 
 
-    def evaluate(self):
+    def evaluate(self) -> None:
         self.model.eval()
         for batch in tqdm(self.val_data , desc="Validating"):
             with torch.no_grad():
-                with autocast(device_type=self.device, dtype=self.precision, enabled=self.enable_amp):
+                with autocast(
+                    device_type=self.device, 
+                    dtype=self.precision, 
+                    enabled=self.enable_amp
+                    ):
                     loss = self.validation_step(self.model, batch, self.device)
                     self.logs["val_loss"].append(loss.item())
 
@@ -200,19 +214,7 @@ class Trainer:
         current_loss = self.logs["train_loss"][-1]  # Get latest loss
         if current_loss < self.logs["best_loss"]:
             self.logs["best_loss"] = current_loss  # Update best loss
-            torch.save(self.model.state_dict(), f"{self.pretrained_path}/pytorch_model.bin")
-
-
-    def predict(self, text: Union[str, None], max_seq_len: Union[int, None] = None) -> str:
-        if self.do_predict is True:
-            raise ValueError(f"text cannot be None when do_predict is True")
-        inputs = self.tokenizer.encode(text)
-        if isinstance(self.model, LlamaModel, GPTModel):
-            assert max_seq_len is not None, "max_seq_len cannot be None when using LlamaModel or GPTModel"
-            result = self.model.generate(inputs, self.tokenizer.eos_token_id, max_seq_len)
-        elif isinstance(self.model, BertModel):
-            result = self.model.fill_mask(inputs)
-        return self.tokenizer.decode(result)    
+            torch.save(self.model.state_dict(), f"{self.pretrained_path}/pytorch_model.bin")  
 
 
     def save_config(self):

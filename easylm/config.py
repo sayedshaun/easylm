@@ -65,7 +65,7 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 1
     gradient_clipping: float = 1.0
     precision: str = "fp16"
-    seed: int = 42
+    seed: Union[int, None] = None
     validation_steps: Union[int, None] = 500
     logging_steps: Union[int, None] = 500
     save_steps: Union[int, None] = 500
