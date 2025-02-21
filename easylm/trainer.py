@@ -39,15 +39,21 @@ class Trainer:
         self.gradient_clipping = config.gradient_clipping
         self.validation_steps = config.validation_steps
         self.learning_rate = config.learning_rate
+        self.weight_decay = config.weight_decay
+        self.lr_epsilon = config.lr_epsilon
         self.batch_size = config.batch_size
         self.logging_steps = config.logging_steps
         self.validation_steps = config.validation_steps
         self.save_steps = config.save_steps
         self.num_workers = config.num_workers
+        self.seed = config.seed
         self.shuffle_train_data = config.shuffle_train_data
         self.pin_memory = config.pin_memory
         self.scaler = GradScaler(device=self.device)
         self.enable_amp = True if torch.cuda.is_available() else False
+
+        torch.manual_seed(self.seed)
+        torch.cuda.manual_seed(self.seed)
 
         #===============================Precision==========================================================
         if config.precision == "fp16":
@@ -67,10 +73,18 @@ class Trainer:
         # Initialize optimizer if needed
         if self.optimizer is None:
             self.optimizer = torch.optim.AdamW(
-                self.model.parameters(), 
-                lr=self.learning_rate if self.learning_rate is not None else 5e-5)
+                params=self.model.parameters(), 
+                weight_decay=self.weight_decay,
+                lr=self.learning_rate,
+                eps=self.lr_epsilon
+                )
         else:
-            self.optimizer = self.optimizer(self.model.parameters(), lr=self.learning_rate)
+            self.optimizer = self.optimizer(
+                params=self.model.parameters(), 
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+                eps=self.lr_epsilon
+                )
 
         self.train_data = self.dataloader(config.train_data)
         self.val_data = self.dataloader(config.val_data)
@@ -81,7 +95,8 @@ class Trainer:
             "epoch": 0,
             "global_step": 0,
             "train_loss": [],
-            "val_loss": []
+            "val_loss": [],
+            "best_loss": float("inf"),
         }
         self.model.to(self.device)
         self.save_config()
@@ -90,41 +105,48 @@ class Trainer:
     def train(self):
         self.model.train()
         global_step = 1
+        accumulated_loss = 0.0  # Track accumulated loss
+        
         for epoch in range(1, self.epochs + 1):
-            for batch in tqdm(self.train_data, desc="Training"):
-                with autocast(
-                    device_type=self.device, 
-                    dtype=self.precision, 
-                    enabled=self.enable_amp
-                    ):
-                    loss = self.train_step(self.model, batch, self.device)
-                
-                self.scaler.scale(loss).backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                self.optimizer.zero_grad()
+            with tqdm(self.train_data, desc=f"Training Epoch {epoch}", dynamic_ncols=True) as pbar:
+                for step, batch in enumerate(pbar, start=1):
+                    with autocast(
+                        device_type=self.device, 
+                        dtype=self.precision, 
+                        enabled=self.enable_amp
+                        ):
+                        loss = self.train_step(self.model, batch, self.device) / self.gradient_accumulation_steps
+                    
+                    accumulated_loss += loss.item()
+                    self.scaler.scale(loss).backward()
 
-                if self.logging_steps is not None and global_step % self.logging_steps == 0 and global_step != 0:
-                    self.logs["train_loss"].append(loss.item())
-                    self.logs["global_step"] = global_step
-                    self.logs["epoch"] = epoch
-                    print(
-                        f"Epoch: {epoch}, Global Step: {global_step}, "
-                        f"Train Loss: {loss.item():.4f}, "
-                    )
-                
-                if (global_step % self.validation_steps == 0 
-                    and global_step != 0 
-                    and self.val_data is not None
-                    ):
-                    self.evaluate()
-                    self.model.train()
+                    # Perform optimization step only when accumulated steps reach the limit
+                    if (step % self.gradient_accumulation_steps == 0) or (step == 1):
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
+                        self.scaler.step(self.optimizer)
+                        self.scaler.update()
+                        self.optimizer.zero_grad()
 
-                if global_step % self.save_steps == 0 and global_step != 0:
-                    self.save()
+                        # Log loss and update tqdm bar
+                        avg_loss = accumulated_loss / self.gradient_accumulation_steps
+                        accumulated_loss = 0.0  # Reset loss accumulator
+                        
+                        if self.logging_steps is not None and global_step % self.logging_steps == 0:
+                            self.logs["train_loss"].append(avg_loss)
+                            self.logs["global_step"] = global_step
+                            self.logs["epoch"] = epoch
+                            pbar.set_postfix(step=global_step, loss=f"{avg_loss:.4f}", best_loss=f"{self.logs['best_loss']:.4f}")
 
-                global_step += 1
+                        global_step += 1
+
+                    # Validation
+                    if global_step % self.validation_steps == 0 and self.val_data is not None:
+                        self.evaluate()
+                        self.model.train()
+
+                    # Save model
+                    if global_step % self.save_steps == 0:
+                        self.save()
 
 
     @staticmethod        
@@ -135,12 +157,8 @@ class Trainer:
         inputs, targets = batch
         inputs = inputs.to(device)
         targets = targets.to(device)
-        targets = targets.view(-1)
-        logits = model(inputs)
-        logits = logits.view(-1, logits.size(-1))
-        if isinstance(model, BertModel):
-            logits = logits[1:]
-        loss = F.cross_entropy(logits, targets)
+        outputs = model(inputs, targets)
+        loss = outputs.loss
         return loss
     
 
@@ -152,13 +170,8 @@ class Trainer:
         inputs, targets = batch
         inputs = inputs.to(device)
         targets = targets.to(device)
-        targets = targets.view(-1)
-        logits = model(inputs)
-        if isinstance(model, BertModel):
-            logits = logits[1:]
-        logits = logits.view(-1, logits.size(-1))
-        loss = F.cross_entropy(logits, targets)
-        return loss
+        outputs = model(inputs)
+        return outputs.loss
 
 
     def evaluate(self):
@@ -182,7 +195,10 @@ class Trainer:
         return dataset
 
     def save(self):
-        torch.save(self.model.state_dict(), f"{self.pretrained_path}/pytorch_model.bin")
+        current_loss = self.logs["train_loss"][-1]  # Get latest loss
+        if current_loss < self.logs["best_loss"]:
+            self.logs["best_loss"] = current_loss  # Update best loss
+            torch.save(self.model.state_dict(), f"{self.pretrained_path}/pytorch_model.bin")
 
 
     def predict(self, text: Union[str, None], max_seq_len: Union[int, None] = None) -> str:
