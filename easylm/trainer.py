@@ -195,7 +195,7 @@ class Trainer:
         return dataset
 
     def save(self):
-        if self.logs["train_loss"] is None:
+        if self.logs["train_loss"] == []:
             return
         current_loss = self.logs["train_loss"][-1]  # Get latest loss
         if current_loss < self.logs["best_loss"]:
