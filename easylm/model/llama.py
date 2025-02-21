@@ -80,5 +80,5 @@ class LlamaModel(nn.Module):
         config = LlamaConfig(**config_dict)
         model = LlamaModel(config)
         model.load_state_dict(
-            torch.load(f"{preprained_path}/pytorch_model.bin", weights_only=True))
+            torch.load(f"{preprained_path}/pytorch_model.pt", weights_only=True), strict=True)
         return model

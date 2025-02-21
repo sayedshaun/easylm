@@ -23,15 +23,17 @@ class Trainer:
             config: TrainingConfig,
             tokenizer: Tokenizer,
             optimizer: Union[torch.optim.Optimizer, None] = None, 
-            pretrained_path: str = "pretrained_model"
+            model_name: str = "my_pretrained_model"
     ) -> None:
         self.config = config
         self.model = model
         self.device = config.device
         self.optimizer = optimizer
         self.tokenizer = tokenizer
-        self.pretrained_path = pretrained_path
-        os.makedirs(self.pretrained_path, exist_ok=True)
+        self.model_name = model_name
+        if os.path.exists(self.model_name):
+            raise ValueError(f"Model name '{self.model_name}' already exists in the current directory.")
+        os.makedirs(self.model_name, exist_ok=True)
         #===============================================
 
         self.epochs = config.epochs
@@ -56,15 +58,15 @@ class Trainer:
         torch.cuda.manual_seed(self.seed) if self.seed is not None else None
         assert self.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
 
-        #===============================Precision==========================================================
+        #=======================================Precision==================================================
         if config.precision == "fp16":
             self.precision = torch.float16
-        elif config.precision == "bfp16":
+        elif config.precision == "bf16":
             self.precision = torch.bfloat16
         elif config.precision == "fp32":
             self.precision = torch.float32
         else:
-            raise ValueError(f"Invalid precision: {config.precision}, must be one of ['fp16', 'bfp16', 'fp32']")
+            raise ValueError(f"Invalid precision: {config.precision}, must be one of ['fp16', 'bf16', 'fp32']")
         
         if self.precision == torch.bfloat16 and torch.cuda.is_bf16_supported() is False:
             raise ValueError("Your device does not support bf16")
@@ -143,16 +145,16 @@ class Trainer:
                                 best_loss=f"{self.logs['best_loss']:.4f}"
                                 )
 
+                        # Save model
+                        if self.save_steps is not None and global_step % self.save_steps == 0:
+                            self.save()
+
                     global_step += 1
 
                     # Validation
                     if global_step % self.validation_steps == 0 and self.val_data is not None:
                         self.evaluate()
                         self.model.train()
-
-                    # Save model
-                    if global_step % self.save_steps == 0:
-                        self.save()
                   
                 pbar.update(1)
 
@@ -208,12 +210,10 @@ class Trainer:
         return dataset
 
     def save(self):
-        if self.logs["train_loss"] == []:
-            return
         current_loss = self.logs["train_loss"][-1]  # Get latest loss
         if current_loss < self.logs["best_loss"]:
             self.logs["best_loss"] = current_loss  # Update best loss
-            torch.save(self.model.state_dict(), f"{self.pretrained_path}/pytorch_model.bin")  
+            torch.save(self.model.state_dict(), f"{self.model_name}/pytorch_model.pt")  
 
 
     def save_config(self):
@@ -225,7 +225,7 @@ class Trainer:
             elif value is None:
                 trainer_config_dict[key] = "None"
         
-        with open(f"{self.pretrained_path}/trainer_config.yaml", "w") as f:
+        with open(f"{self.model_name}/trainer_config.yaml", "w") as f:
             yaml.dump(trainer_config_dict, f)
 
         model_config_dict = {}
@@ -235,7 +235,7 @@ class Trainer:
             elif value is None:
                 model_config_dict[key] = "None"
 
-        with open(f"{self.pretrained_path}/model_config.yaml", "w") as f:
+        with open(f"{self.model_name}/model_config.yaml", "w") as f:
             yaml.dump(model_config_dict, f)
 
-        self.tokenizer.save(path=self.pretrained_path)
+        self.tokenizer.save(path=self.model_name)

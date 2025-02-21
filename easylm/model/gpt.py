@@ -1,6 +1,7 @@
 from typing import Union
 import torch
 import torch.nn.functional as F
+import yaml
 from easylm.config import GPTConfig
 from easylm.nn import Linear, TransformerDecoderBlock, PositionalEmbeddings
 from easylm.utils import CausalModelOutput
@@ -65,3 +66,12 @@ class GPTModel(torch.nn.Module):
                     break
             return generated
 
+    @staticmethod
+    def from_pretrained(preprained_path: str):
+        with open(f"{preprained_path}/model_config.yaml", "r") as f:
+            config_dict = yaml.safe_load(f)
+        config = GPTConfig(**config_dict)
+        model =GPTModel(config)
+        model.load_state_dict(
+            torch.load(f"{preprained_path}/pytorch_model.pt", weights_only=True), strict=True)
+        return model

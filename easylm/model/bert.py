@@ -1,6 +1,7 @@
 from typing import Tuple, Union
 import torch
 import torch.nn.functional as F
+import yaml
 from easylm.config import BertConfig
 from easylm.nn import (
     PositionalEmbeddings, 
@@ -112,3 +113,14 @@ class BertModel(torch.nn.Module):
         logits = outputs.logits
         # Remove the logits for the [CLS] token (first token)
         return logits[:, 1:, :]
+    
+
+    @staticmethod
+    def from_pretrained(preprained_path: str):
+        with open(f"{preprained_path}/model_config.yaml", "r") as f:
+            config_dict = yaml.safe_load(f)
+        config = BertConfig(**config_dict)
+        model = BertModel(config)
+        model.load_state_dict(
+            torch.load(f"{preprained_path}/pytorch_model.pt", weights_only=True), strict=True)
+        return model

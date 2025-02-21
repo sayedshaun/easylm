@@ -61,6 +61,7 @@ class Tokenizer(TextLoader):
         self._model_prefix = "VOCAB"
         self.vocab_size = vocab_size
         self._model_path = os.path.join(self._tokenizer_dir, f"{self._model_prefix}.model")
+        self._vocab_path = os.path.join(self._tokenizer_dir, f"{self._model_prefix}.vocab")
 
         # Set default special tokens.
         self.special_tokens = [
@@ -119,6 +120,7 @@ class Tokenizer(TextLoader):
     
     def save(self, path: str) -> None:
         shutil.copy(self._model_path, path)
+        shutil.copy(self._vocab_path, path)
 
     @classmethod
     def from_pretrained(cls, pretrained_path: str) -> "Tokenizer":
