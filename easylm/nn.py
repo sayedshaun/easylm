@@ -4,6 +4,8 @@ from torch import nn
 from typing import Tuple, Union
 import torch.nn.functional as F
 
+from easylm.config import VITConfig
+
 class Linear(nn.Module):
     def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         super(Linear, self).__init__()
@@ -346,24 +348,46 @@ class PatchEmbedding(nn.Module):
         return X.transpose(1, 2)  # (B, num_patches, embed_dim)
     
 
+class VITImageClassifier(torch.nn.Module):
+    def __init__(self, config: VITConfig) -> None:
+        super(VITImageClassifier, self).__init__()
+        self.config = config
+        self.patch_embed = PatchEmbedding(
+            img_size=config.image_size,
+            patch_size=config.patch_size,
+            in_channels=config.color_channels,
+            embed_dim=config.hidden_size
+        )
+        self.pos_embed = torch.nn.Parameter(torch.randn(1, self.patch_embed.num_patches + 1, config.hidden_size))
+        self.cls_token = torch.nn.Parameter(torch.randn(1, 1, config.hidden_size))
+        self.blocks = torch.nn.ModuleList([
+            TransformerEncoderBlock(
+                d_model=config.hidden_size, 
+                n_heads=config.num_heads,
+                norm_epsilon=config.norm_epsilon,
+                dropout=config.dropout) for _ in range(config.num_layers)
+        ])
+        self.norm = LayerNorm(config.hidden_size, config.norm_epsilon)
+        self.dropout = Dropout(0.1)
+        self.classifier = Linear(config.hidden_size, config.num_classes)
 
-
-__all__ = [
-    "Linear",
-    "Softmax",
-    "SiLU",
-    "ReLU",
-    "Dropout",
-    "Embedding",
-    "PositionalEmbeddings",
-    "TransformerMultiheadAttention",
-    "LayerNorm",
-    "FeedForward",
-    "TransformerDecoderBlock",
-    "TransformerEncoderBlock",
-    "RMSNorm",
-    "LlamaFeedForward",
-    "LlamaAttention",
-    "LlamaBlock",
-    "PatchEmbedding"
-]
+    def forward(self, inputs: torch.Tensor, labels: Union[torch.Tensor, None] = None) -> torch.Tensor:
+        B = inputs.shape[0]
+        inputs = self.patch_embed(inputs)  # (B, num_patches, embed_dim)
+        # Add class token
+        cls_token = self.cls_token.expand(B, -1, -1)
+        inputs = torch.cat((cls_token, inputs), dim=1)  # (B, num_patches+1, embed_dim)
+        # Add positional embedding
+        inputs = inputs + self.pos_embed
+        inputs = self.dropout(inputs)
+        # Process through transformer blocks
+        for block in self.blocks:
+            inputs = block(inputs)
+        # Classification
+        inputs = self.norm(inputs)
+        logits = self.classifier(inputs[:, 0])
+        if labels is not None:
+            loss = F.cross_entropy(logits, labels)
+            return loss
+        else:
+            return logits
