@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import yaml
 from easylm.config import LlamaConfig
 from easylm.utils import CausalModelOutput
-from easylm.nn import Dropout, Embedding, Linear, LlamaBlock
+from easylm.nn import Dropout, Embedding, Linear, LlamaBlock, RMSNorm
 
 
 class LlamaModel(nn.Module):
@@ -24,6 +24,7 @@ class LlamaModel(nn.Module):
                 for _ in range(config.num_layers)
             ]
         )
+        self.norm = RMSNorm(config.hidden_size, config.norm_epsilon)
         self.dropout = Dropout(config.dropout)
         self.linear = Linear(config.hidden_size, config.vocab_size)
     
@@ -40,6 +41,7 @@ class LlamaModel(nn.Module):
         for block in self.blocks:
             input_ids = block(input_ids, position_ids, mask)
         input_ids = self.dropout(input_ids)
+        input_ids = self.norm(input_ids)
         logits = self.linear(input_ids)
         if target_ids is not None:
             loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), target_ids.view(-1))
@@ -58,7 +60,15 @@ class LlamaModel(nn.Module):
         return mask
     
 
-    def generate(self, input_ids, max_new_tokens, context_size=1, temperature=0.0, top_k=None, eos_id=None):    
+    def generate(
+            self, 
+            input_ids: torch.Tensor, 
+            max_new_tokens: int = 20, 
+            context_size: int = 1, 
+            temperature: float = 1.0, 
+            top_k: Union[int, None] = None, 
+            eos_id: Union[int, None] = None
+        ) -> torch.Tensor:  
         for _ in range(max_new_tokens):           
             idx_cond = input_ids[:, -context_size:] 
             with torch.no_grad():    
