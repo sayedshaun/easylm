@@ -116,11 +116,16 @@ class BertModel(torch.nn.Module):
     
 
     @staticmethod
-    def from_pretrained(preprained_path: str):
+    def from_pretrained(preprained_path: str, device: Union[torch.device, str] = "cpu"):
         with open(f"{preprained_path}/model_config.yaml", "r") as f:
             config_dict = yaml.safe_load(f)
         config = BertConfig(**config_dict)
         model = BertModel(config)
         model.load_state_dict(
-            torch.load(f"{preprained_path}/pytorch_model.pt", weights_only=True), strict=True)
+            torch.load(
+                f"{preprained_path}/pytorch_model.pt", 
+                weights_only=True, 
+                map_location=device), 
+            strict=True
+        )
         return model
