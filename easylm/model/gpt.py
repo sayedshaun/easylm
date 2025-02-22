@@ -52,26 +52,44 @@ class GPTModel(torch.nn.Module):
         mask = torch.ones(S, S, dtype=torch.bool).tril(diagonal=0)
         return mask
 
-    def generate(self, input_ids: torch.Tensor, eos_token_id: int, max_length: int = 50) -> torch.Tensor:
-        self.eval()
-        with torch.no_grad():
-            generated = input_ids.clone()
-            for _ in range(max_length):
-                outputs = self(generated, causal_mask=False) # (batch_size, seq_len, vocab_size)
-                logits = outputs.logits
-                next_token_logits = logits[:, -1, :] # last token's logits
-                next_token = next_token_logits.argmax(dim=-1, keepdim=True) # Greedy decoding
-                generated = torch.cat([generated, next_token], dim=1) # Append new token to sequence
-                if next_token == eos_token_id:
-                    break
-            return generated
+    def generate(self, input_ids, max_new_tokens, context_size=1, temperature=0.0, top_k=None, eos_id=None):    
+        for _ in range(max_new_tokens):           
+            idx_cond = input_ids[:, -context_size:] 
+            with torch.no_grad():    
+                outputs = self.forward(idx_cond, causal_mask=False)
+                logits = outputs.logits 
+                logits = logits[:, -1, :] 
+
+                if top_k is not None:                   
+                    top_logits, _ = torch.topk(logits, top_k)    
+                    min_val = top_logits[:, -1]    
+                    logits = torch.where(logits < min_val, torch.tensor(float('-inf')).to(logits.device), logits) 
+                
+                if temperature > 0.0:                     
+                    logits = logits / temperature    
+                    probs = torch.softmax(logits, dim=-1)    
+                    idx_next = torch.multinomial(probs, num_samples=1) 
+                else:       
+                    idx_next = torch.argmax(logits, dim=-1, keepdim=True) 
+
+                if eos_id is not None and (idx_next == eos_id).all():                 
+                    break  
+                
+                input_ids = torch.cat((input_ids, idx_next), dim=1)    
+
+        return input_ids
 
     @staticmethod
-    def from_pretrained(preprained_path: str):
+    def from_pretrained(preprained_path: str, device: Union[torch.device, str] = "cpu"):
         with open(f"{preprained_path}/model_config.yaml", "r") as f:
             config_dict = yaml.safe_load(f)
         config = GPTConfig(**config_dict)
         model =GPTModel(config)
         model.load_state_dict(
-            torch.load(f"{preprained_path}/pytorch_model.pt", weights_only=True), strict=True)
+            torch.load(
+                f"{preprained_path}/pytorch_model.pt", 
+                weights_only=True, 
+                map_location=device), 
+            strict=True
+        )
         return model
