@@ -40,13 +40,13 @@ class TextLoader(ABC):
 
 
 class Tokenizer(TextLoader):
-    mask_token: str = "[MASK]"
-    cls_token: str = "[CLS]" 
-    sep_token: str = "[SEP]"
-    pad_token: str = "[PAD]"
-    unk_token: str = "[UNK]"
-    sos_token: str = "[SOS]"
-    eos_token: str = "[EOS]"
+    mask_token: str = "<|mask|>"
+    cls_token: str = "<|cls|>" 
+    sep_token: str = "<|sep|>"
+    pad_token: str = "<|pad|>"
+    unk_token: str = "<|unk|>"
+    sos_token: str = "<|startoftext|>"
+    eos_token: str = "<|endoftext|>"
 
     def __init__(
         self,

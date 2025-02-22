@@ -14,26 +14,26 @@ torch.manual_seed(42)
 
 
 class Document(ABC):
-    def load(self, dir_or_path: str) -> list:
+    def load(self, dir_or_path: str) -> str:
         if os.path.isdir(dir_or_path):
             return Document.load_data_from_dir(dir_or_path)
         else:
             return Document.load_data(dir_or_path)
             
     @staticmethod
-    def load_data_from_dir(dir_path: str) -> list:
+    def load_data_from_dir(dir_path: str) -> str:
         all_text = ""
         for file in os.listdir(dir_path):
             if file.endswith(".txt"):
                 full_path = os.path.join(dir_path, file)
-                with open(full_path, "r", encoding="utf-8") as f:
-                    all_text += f.read() + "\n\n"  # Adding a newline as a separator
+                all_text += Tokenizer.load_data(full_path) + "\n\n"  # Adding a newline as a separator
         return all_text
 
     @staticmethod
-    def load_data(file_path: str) -> list:
+    def load_data(file_path: str) -> str:
         with open(file_path, "r", encoding="utf-8") as file:
             text = file.read()
+            text = text.replace("\n", "<|endoftext|>")
         return text
     
 
