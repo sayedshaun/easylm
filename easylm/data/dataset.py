@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import torch
 from abc import ABC
 import numpy as np
@@ -21,20 +22,27 @@ class Document(ABC):
             return Document.load_data(dir_or_path)
             
     @staticmethod
+    def collapse_newlines(text: str) -> str:
+        # Replace two or more consecutive newline characters with a single newline.
+        return re.sub(r'\n{2,}', '\n', text)
+
+    @staticmethod
     def load_data_from_dir(dir_path: str) -> str:
         all_text = ""
         for file in os.listdir(dir_path):
             if file.endswith(".txt"):
                 full_path = os.path.join(dir_path, file)
-                all_text += Tokenizer.load_data(full_path) + "\n\n"  # Adding a newline as a separator
+                all_text += Document.load_data(full_path) + "\n"  # Using a single newline as a separator.
         return all_text
 
     @staticmethod
     def load_data(file_path: str) -> str:
         with open(file_path, "r", encoding="utf-8") as file:
             text = file.read()
-            text = text.replace("\n", "<|endoftext|>")
-        return text
+            # Collapse multiple newlines to a single newline.
+            text = Document.collapse_newlines(text)
+        return text.strip()
+
     
 
 class IterableDocument(ABC):
