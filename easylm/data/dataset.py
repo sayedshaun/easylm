@@ -23,7 +23,7 @@ class Document:
             return self.load_data(dir_or_path)
             
     def collapse_newlines(self, text: str) -> str:
-        # Replace two or more consecutive newline characters with a single newline.
+        # Replace two or more newline with a single newline.
         return re.sub(r'\n{2,}', '\n', text)
 
     def load_data_from_dir(self, dir_path: str) -> str:
@@ -63,12 +63,12 @@ class CausalLMDataset(torch.utils.data.Dataset, Document):
         return (
             torch.tensor(input_ids, dtype=torch.long), 
             torch.tensor(target_ids, dtype=torch.long)
-        )
+            )
     
 
 class IterableDocument:
     @staticmethod
-    def stream_data_from_dir(dir_path: str):
+    def stream_data_from_dir(dir_path: str) -> Generator[str, None, None]:
         """Generator that yields text from each .txt file in a directory."""
         for file in os.listdir(dir_path):
             if file.endswith(".txt"):
@@ -77,14 +77,14 @@ class IterableDocument:
                     yield f.read()
 
     @staticmethod
-    def stream_data(file_path: str):
+    def stream_data(file_path: str) -> Generator[str, None, None]:
         """Generator that yields text from a single file."""
         with open(file_path, "r", encoding="utf-8") as file:
             yield file.read()
 
 
 class StreamingCausalLMDataset(torch.utils.data.IterableDataset, IterableDocument):
-    def __init__(self, dir_or_path: str, tokenizer, max_seq_len: int, stride: int = 1):
+    def __init__(self, dir_or_path: str, tokenizer, max_seq_len: int, stride: int = 1) -> None:
         self.dir_or_path = dir_or_path
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
