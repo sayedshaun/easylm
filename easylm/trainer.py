@@ -110,7 +110,7 @@ class Trainer:
         global_step = 1
         accumulated_loss = 0.0  # Track accumulated loss
         
-        with tqdm(total=self.epochs, desc="Training") as pbar:
+        with tqdm(total=self.epochs * len(self.train_data), desc="Training") as pbar:
             for epoch in range(1, self.epochs + 1):
                 for batch in self.train_data:
                     with autocast(

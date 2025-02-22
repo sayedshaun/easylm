@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 import torchvision
+from platformdirs import user_cache_dir
 from easylm.tokenizer import Tokenizer
 from typing import List, Optional, Tuple, Generator, Union
 
@@ -14,156 +15,55 @@ random.seed(42)
 torch.manual_seed(42)
 
 
-# class Document:
-#     def load(self, dir_or_path: str) -> str:
-#         if os.path.isdir(dir_or_path):
-#             return Document.load_data_from_dir(dir_or_path)
-#         else:
-#             return Document.load_data(dir_or_path)
-            
-#     @staticmethod
-#     def collapse_newlines(text: str) -> str:
-#         # Replace two or more consecutive newline characters with a single newline.
-#         return re.sub(r'\n{2,}', '\n', text)
-
-#     @staticmethod
-#     def load_data_from_dir(dir_path: str) -> str:
-#         all_text = ""
-#         for file in os.listdir(dir_path):
-#             if file.endswith(".txt"):
-#                 full_path = os.path.join(dir_path, file)
-#                 all_text += Document.load_data(full_path) + "\n"  # Using a single newline as a separator.
-#         return all_text
-
-#     @staticmethod
-#     def load_data(file_path: str) -> str:
-#         with open(file_path, "r", encoding="utf-8") as file:
-#             text = file.read()
-#             # Collapse multiple newlines to a single newline.
-#             text = Document.collapse_newlines(text)
-#         return text.strip()
-
-
-# class CausalLMDataset(torch.utils.data.Dataset, Document):
-#     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
-#         self.max_seq_len = max_seq_len
-#         data = self.load(dir_or_path)
-#         self.data = tokenizer.encode(data).tolist()[0]
-
-#     def __len__(self) -> int:
-#         return len(self.data) - self.max_seq_len
-
-#     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-#         block = self.data[idx: idx + self.max_seq_len + 1]
-#         input_ids, target_ids = block[:-1], block[1:]
-#         return torch.tensor(input_ids), torch.tensor(target_ids)
-
-
 class Document:
-    def load(self, dir_or_path: str):
-        """
-        Load data from a directory or a single file.
-        Always returns a generator that yields text chunks.
-        """
+    def load(self, dir_or_path: str) -> str:
         if os.path.isdir(dir_or_path):
-            yield from self.load_data_from_dir(dir_or_path)
+            return self.load_data_from_dir(dir_or_path)
         else:
-            yield from self.load_data(dir_or_path)
+            return self.load_data(dir_or_path)
             
     def collapse_newlines(self, text: str) -> str:
-        # Replace two or more newlines with a single newline.
+        # Replace two or more consecutive newline characters with a single newline.
         return re.sub(r'\n{2,}', '\n', text)
 
-    def load_data_from_dir(self, dir_path: str):
-        """
-        Iterate over all .txt files in the directory and yield their contents.
-        """
+    def load_data_from_dir(self, dir_path: str) -> str:
+        all_text = ""
         for file in os.listdir(dir_path):
             if file.endswith(".txt"):
                 full_path = os.path.join(dir_path, file)
-                yield from self.load_data(full_path)
-    
-    def get_size_mb_from_string(self, text: str) -> float:
-        """
-        Get the size (in MB) of the given text when encoded in UTF-8.
-        """
-        return len(text.encode("utf-8")) / (1024 * 1024)
-    
-    def load_data(self, file_path: str):
-        """
-        Yield chunks of text from the file. For files larger than 50 MB,
-        read line-by-line until the accumulated text reaches roughly 50 MB.
-        Otherwise, yield the full file content.
-        """
-        size_threshold_mb = 50
-        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-        
-        if file_size_mb > size_threshold_mb:
-            current_chunk = ""
-            with open(file_path, "r", encoding="utf-8") as file:
-                for line in file:
-                    # Optionally collapse newlines for each line.
-                    line = self.collapse_newlines(line)
-                    current_chunk += line
-                    if self.get_size_mb_from_string(current_chunk) >= size_threshold_mb:
-                        yield current_chunk.strip()
-                        current_chunk = ""
-                if current_chunk:
-                    yield current_chunk.strip()
-        else:
-            with open(file_path, "r", encoding="utf-8") as file:
-                text = file.read()
-                text = self.collapse_newlines(text)
-            yield text.strip()
+                all_text += self.load_data(full_path) + "\n"  # Using a single newline as a separator.
+        return all_text
+
+    def load_data(self, file_path: str) -> str:
+        with open(file_path, "r", encoding="utf-8") as file:
+            text = file.read()
+            # Collapse multiple newlines to a single newline.
+            text = self.collapse_newlines(text)
+        return text.strip()
+
 
 class CausalLMDataset(torch.utils.data.Dataset, Document):
-    def __init__(self, dir_or_path: str, tokenizer, max_seq_len: int) -> None:
-        """
-        Instead of tokenizing the entire corpus at once, we iterate over text chunks,
-        tokenize each, and record the number of sliding windows available from each chunk.
-        """
+    def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
         self.max_seq_len = max_seq_len
-        self.tokenizer = tokenizer
-        
-        # Lists to store tokenized chunks and their sliding window counts.
-        self.tokenized_chunks: List[List[int]] = []
-        self.sliding_window_counts: List[int] = []
-        self.cum_windows: List[int] = []  # Cumulative sum to index into the overall dataset.
-        
-        total_windows = 0
-        for chunk in self.load(dir_or_path):
-            # Tokenize the chunk. (Assuming tokenizer.encode returns an object with an 'ids' attribute.)
-            tokenized = self.tokenizer.encode(chunk)[0].tolist()
-            # Only keep chunks that are long enough for at least one sliding window.
-            if len(tokenized) > self.max_seq_len:
-                self.tokenized_chunks.append(tokenized)
-                windows = len(tokenized) - self.max_seq_len
-                self.sliding_window_counts.append(windows)
-                total_windows += windows
-                self.cum_windows.append(total_windows)
-        self.total_windows = total_windows
+        data = self.load(dir_or_path)
+
+        # Store tokenized data in a memory-mapped file
+        self.memmap_file = os.path.join(user_cache_dir("easylm"), "memmap.bin")
+        tokens = tokenizer.encode(data).tolist()[0]
+        self.data = np.memmap(self.memmap_file, dtype=np.int32, mode="w+", shape=(len(tokens),))
+        self.data[:] = tokens  # Store tokens in disk-backed memory
 
     def __len__(self) -> int:
-        return self.total_windows
+        return len(self.data) - self.max_seq_len
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Determine which tokenized chunk the global index falls into.
-        chunk_idx = 0
-        while idx >= self.cum_windows[chunk_idx]:
-            chunk_idx += 1
-        
-        # Compute the local index within that chunk.
-        if chunk_idx == 0:
-            local_idx = idx
-        else:
-            local_idx = idx - self.cum_windows[chunk_idx - 1]
-            
-        tokens = self.tokenized_chunks[chunk_idx]
-        # Get the sliding window (of max_seq_len + 1 tokens) for input and target.
-        block = tokens[local_idx: local_idx + self.max_seq_len + 1]
+        # Load only the required part into memory
+        block = self.data[idx: idx + self.max_seq_len + 1]
         input_ids, target_ids = block[:-1], block[1:]
-        return torch.tensor(input_ids), torch.tensor(target_ids)
-
+        return (
+            torch.tensor(input_ids, dtype=torch.long), 
+            torch.tensor(target_ids, dtype=torch.long)
+        )
     
 
 class IterableDocument:
@@ -181,7 +81,7 @@ class IterableDocument:
         """Generator that yields text from a single file."""
         with open(file_path, "r", encoding="utf-8") as file:
             yield file.read()
-    
+
 
 class StreamingCausalLMDataset(torch.utils.data.IterableDataset, IterableDocument):
     def __init__(self, dir_or_path: str, tokenizer, max_seq_len: int, stride: int = 1):
