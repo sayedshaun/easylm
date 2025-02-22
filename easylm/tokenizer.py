@@ -113,7 +113,8 @@ class Tokenizer(TextLoader):
     def decode(self, tokens: Union[Union[List[int], torch.Tensor, np.ndarray]]) -> str:
         if isinstance(tokens, torch.Tensor):
             tokens = tokens.tolist()
-        return self.processor.decode(tokens)
+        decoded = self.processor.decode(tokens)
+        return " ".join(decoded)
 
     def __len__(self) -> int:
         return self.processor.get_piece_size()
