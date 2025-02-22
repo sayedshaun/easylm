@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "easylm"
+version = "0.0.1"
+description = "Easy Language Model Training Library"
+readme = "README.md"
+authors = [
+    { name = "Sayed Shaun", email = "your.email@example.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy==2.2.2",
+    "sentencepiece==0.2.0",
+    "torch",
+    "torchvision",
+    "pillow==11.1.0"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+keywords = ["NLP", "language model", "training"]
