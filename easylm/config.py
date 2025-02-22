@@ -1,19 +1,18 @@
 import torch
 from dataclasses import dataclass
-from typing import Union, NamedTuple
-from easylm.tokenizer import Tokenizer
+from typing import Union
 from torch.utils.data import DataLoader, Dataset
 
 
 @dataclass
 class GPTConfig:
     vocab_size: Union[int, None] = None
-    hidden_size: Union[int, None] = 768
-    num_heads: Union[int, None] = 12
-    num_layers: Union[int, None] = 12
-    norm_epsilon: Union[float, None] = 1e-5 
-    dropout: Union[float, None] = 0.1
-    max_seq_len: Union[int, None] = 512
+    hidden_size: Union[int, None] = None
+    num_heads: Union[int, None] = None
+    num_layers: Union[int, None] = None
+    norm_epsilon: Union[float, None] = None
+    dropout: Union[float, None] = None
+    max_seq_len: Union[int, None] = None
 
 
 @dataclass
@@ -22,9 +21,9 @@ class LlamaConfig:
     hidden_size: Union[int, None] = None
     num_heads: Union[int, None] = None
     num_layers: Union[int, None] = None
-    norm_epsilon: Union[float, None] = 1e-5
-    dropout: Union[float, None] = 0.1
-    max_seq_len: Union[int, None] = 512
+    norm_epsilon: Union[float, None] = None
+    dropout: Union[float, None] = None
+    max_seq_len: Union[int, None] = None
 
 
 @dataclass
@@ -53,9 +52,9 @@ class VITConfig:
 @dataclass
 class TrainingConfig:
     model: Union[torch.nn.Module, None] = None
-    epochs: Union[int, None] = 1
-    batch_size: Union[int, None] = 8
-    learning_rate: float = 1e-5
+    epochs: Union[int, None] =  None
+    batch_size: Union[int, None] = None
+    learning_rate: float = None
     weight_decay: float = 0
     lr_epsilon: float = 1e-8
     train_data: Union[DataLoader, Dataset, None] = None
