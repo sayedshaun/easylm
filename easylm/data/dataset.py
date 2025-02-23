@@ -42,16 +42,11 @@ class Document:
         return text.strip()
 
 
-class CausalLMDataset(torch.utils.data.Dataset, Document):
+class CausalDataset(torch.utils.data.Dataset, Document):
     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
         self.max_seq_len = max_seq_len
         data = self.load(dir_or_path)
-
-        # Store tokenized data in a memory-mapped file
-        self.memmap_file = os.path.join(user_cache_dir("easylm"), "memmap.bin")
-        tokens = tokenizer.encode(data).tolist()[0]
-        self.data = np.memmap(self.memmap_file, dtype=np.int32, mode="w+", shape=(len(tokens),))
-        self.data[:] = tokens  # Store tokens in disk-backed memory
+        self.data = tokenizer.encode(data).tolist()[0]
 
     def __len__(self) -> int:
         return len(self.data) - self.max_seq_len
@@ -67,23 +62,31 @@ class CausalLMDataset(torch.utils.data.Dataset, Document):
     
 
 class IterableDocument:
-    @staticmethod
-    def stream_data_from_dir(dir_path: str) -> Generator[str, None, None]:
-        """Generator that yields text from each .txt file in a directory."""
+    def stream_data_from_dir(self, dir_path: str) -> Generator[str, None, None]:
         for file in os.listdir(dir_path):
             if file.endswith(".txt"):
-                full_path = os.path.join(dir_path, file)
-                with open(full_path, "r", encoding="utf-8") as f:
-                    yield f.read()
+                a_path = os.path.join(dir_path, file)
+                yield from self.stream_data(a_path)
 
-    @staticmethod
-    def stream_data(file_path: str) -> Generator[str, None, None]:
-        """Generator that yields text from a single file."""
+    def stream_data(self, file_path: str) -> Generator[str, None, None]:
         with open(file_path, "r", encoding="utf-8") as file:
-            yield file.read()
+            a_file = file.read().strip()
+            yield self.collapse_newlines(a_file)
 
+    def collapse_newlines(self, text: str) -> str:
+        # Replace two or more newline with a single newline.
+        return re.sub(r'\n{2,}', '\n', text)
+    
+    def load(self, dir_or_path: str) -> Tuple[List[str], Generator[str, None, None]]:
+            if os.path.isdir(dir_or_path):
+                files = sorted(os.listdir(dir_or_path))
+                text_generator = self.stream_data_from_dir(dir_or_path)
+            else:
+                files = [dir_or_path]
+                text_generator = self.stream_data(dir_or_path)
+            return files, text_generator
 
-class StreamingCausalLMDataset(torch.utils.data.IterableDataset, IterableDocument):
+class StreamingCausalDataset(torch.utils.data.IterableDataset, IterableDocument):
     def __init__(self, dir_or_path: str, tokenizer, max_seq_len: int, stride: int = 1) -> None:
         self.dir_or_path = dir_or_path
         self.tokenizer = tokenizer
@@ -91,41 +94,27 @@ class StreamingCausalLMDataset(torch.utils.data.IterableDataset, IterableDocumen
         self.stride = stride
 
     def __iter__(self):
-        # Decide whether we're dealing with a directory or a single file
-        if os.path.isdir(self.dir_or_path):
-            text_generator = IterableDocument.stream_data_from_dir(self.dir_or_path)
-            files = sorted(os.listdir(self.dir_or_path))
-        else:
-            text_generator = IterableDocument.stream_data(self.dir_or_path)
-            files = [self.dir_or_path]
-
+        files, text_generator = self.load(self.dir_or_path)
         # If using multiple workers, split the files among them
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is not None:
-            # Get the full list of files for proper splitting
-            if os.path.isdir(self.dir_or_path):
-                all_files = [os.path.join(self.dir_or_path, file) for file in files if file.endswith(".txt")]
-            else:
-                all_files = [self.dir_or_path]
+            all_files = files
             # Subsample files based on worker ID and total number of workers
             all_files = all_files[worker_info.id::worker_info.num_workers]
             text_generator = (open(file, "r", encoding="utf-8").read() for file in all_files)
 
-        # For each text, tokenize and yield sliding windows as (input, target) pairs
         for text in text_generator:
-            # Tokenize the text. Adjust as needed if your tokenizer supports streaming.
             token_ids = self.tokenizer.encode(text).tolist()[0]
             n_tokens = len(token_ids)
             # Use a sliding window to generate examples
             for i in range(0, n_tokens - self.max_seq_len, self.stride):
                 block = token_ids[i: i + self.max_seq_len + 1]
-                input_ids = block[:-1]
-                target_ids = block[1:]
+                input_ids, target_ids = block[:-1], block[1:]
                 yield torch.tensor(input_ids), torch.tensor(target_ids)
 
 
 
-class MaskedLMDataset(torch.utils.data.Dataset, Document):
+class MaskedDataset(torch.utils.data.Dataset, Document):
     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
         self.mask_prob = mask_prob
         self.max_seq_len = max_seq_len
@@ -157,7 +146,7 @@ class MaskedLMDataset(torch.utils.data.Dataset, Document):
                     pass
 
         return torch.tensor(input_ids), torch.tensor(target_ids)
-
+    
 
 class ImageClassificationDataset(torch.utils.data.Dataset):
     """
