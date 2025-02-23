@@ -1,4 +1,5 @@
 import os
+import shutil
 import yaml
 import torch
 from tqdm import tqdm
@@ -32,7 +33,7 @@ class Trainer:
         self.tokenizer = tokenizer
         self.model_name = model_name
         if os.path.exists(self.model_name):
-            raise ValueError(f"Model name '{self.model_name}' already exists in the current directory.")
+            shutil.rmtree(self.model_name)
         os.makedirs(self.model_name, exist_ok=True)
         #===============================================
 
