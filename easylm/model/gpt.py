@@ -50,9 +50,9 @@ class GPTModel(torch.nn.Module):
         else:
             return CausalModelOutput(logits=logits)
     
-    def _make_causal_mask(self, X: torch.Tensor)-> torch.Tensor:
-        N, S = X.shape # batch, seq_len
-        mask = torch.ones(S, S, dtype=torch.bool).tril(diagonal=0)
+    def _make_causal_mask(self, input_ids: torch.Tensor)-> torch.Tensor:
+        N, S = input_ids.shape # batch, seq_len
+        mask = torch.ones(S, S, dtype=torch.bool, device=input_ids.device).tril(diagonal=0)
         return mask
 
     def generate(
