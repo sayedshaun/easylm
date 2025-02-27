@@ -57,6 +57,6 @@ from easylm.tokenizer import Tokenizer
 tokenizer = Tokenizer.from_pretrained("nano-llama")
 model = LlamaModel.from_pretrained("nano-llama")
 inputs = tokenizer.encode("Sherlock Holmes")
-output = model.generate(inputs, tokenizer.eos_token_id, max_seq_len=50)
+output = model.generate(inputs, eos_id=tokenizer.eos_token_id, max_new_tokens=50)
 tokenizer.decode(output)
 ```
