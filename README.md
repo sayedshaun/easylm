@@ -1,6 +1,6 @@
 # EasyLM, A python package for training Language Models from scratch
 
-EasyLM is a python package for training Language Models from scratch. It provides a simple interface to train and evaluate Language Models on various tasks.
+EasyLM is a python package for training Language Models from scratch. It provides a simple interface to train large Language Models from scratch with few lines of code.
 
 ## Installation
 
@@ -18,6 +18,8 @@ from easylm.data import CausalLMDataset
 from easylm.tokenizer import Tokenizer
 from easylm.config import TrainingConfig, LlamaConfig
 from easylm.trainer import Trainer
+from easylm.utils import trainable_parameters
+
 
 data_path = "data"
 tokenizer = Tokenizer(data_path, vocab_size=5000)
@@ -29,23 +31,37 @@ model = LlamaModel(
         num_heads=4,
         num_layers=4,
         dropout=0.1,
-        max_seq_len=50
+        max_seq_len=50,
+        norm_epsilon=1e-5
     )
 )
 trainer = Trainer(
     model=model,
     tokenizer=tokenizer,
-    pretrained_path="nano-llama",
+    model_name="nano-llama",
     config=TrainingConfig(
         train_data=dataset,
         learning_rate=1e-4,
         epochs=10,
         batch_size=8,
-        device="cpu",
+        device="cuda",
         logging_steps=10
     )
 )
+print(trainable_parameters(model))
 trainer.train()
+```
+
+
+### Pretrained Detailes:
+Once the model is trained the pretrained dicretory will looks like this:
+```
+nano-llama/
+    ├── train_config.yaml
+    ├── model_config.yaml
+    ├── pytorch_model.pt
+    ├── VOCAB.model
+    └── VOCAB.vocab
 ```
 
 ### Inference
