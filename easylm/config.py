@@ -69,7 +69,7 @@ class TrainingConfig:
     logging_steps: Union[int, None] = 500
     save_steps: Union[int, None] = 500
     num_workers: Union[int, None] = 0
-    shuffle_train_data: bool = False
+    shuffle_data: bool = False
     pin_memory: bool = False
 
 

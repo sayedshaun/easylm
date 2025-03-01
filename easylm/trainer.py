@@ -50,7 +50,7 @@ class Trainer:
         self.save_steps = config.save_steps
         self.num_workers = config.num_workers
         self.seed = config.seed
-        self.shuffle_train_data = config.shuffle_train_data
+        self.shuffle_train_data = config.shuffle_data
         self.pin_memory = config.pin_memory
         self.scaler = GradScaler(device=self.device)
         self.enable_amp = True if torch.cuda.is_available() else False
