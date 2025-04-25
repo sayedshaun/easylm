@@ -120,6 +120,7 @@ class Tokenizer(TextLoader):
         return self.processor.get_piece_size()
     
     def save(self, path: str) -> None:
+        os.makedirs(path, exist_ok=True)
         shutil.copy(self._model_path, path)
         shutil.copy(self._vocab_path, path)
 
