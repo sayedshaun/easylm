@@ -114,7 +114,7 @@ class Tokenizer(TextLoader):
         if isinstance(tokens, torch.Tensor):
             tokens = tokens.tolist()
         decoded = self.processor.decode(tokens)
-        return " ".join(decoded)
+        return "".join(decoded)
 
     def __len__(self) -> int:
         return self.processor.get_piece_size()
