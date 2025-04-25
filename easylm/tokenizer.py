@@ -108,7 +108,7 @@ class Tokenizer(TextLoader):
         if not isinstance(text, str):
             raise TypeError(f"Expected str, got {type(text)}")
         encoded = self.processor.encode(text, out_type=int)
-        return torch.tensor(encoded).unsqueeze(0)
+        return encoded
 
     def decode(self, tokens: Union[Union[List[int], torch.Tensor, np.ndarray]]) -> str:
         if isinstance(tokens, torch.Tensor):
