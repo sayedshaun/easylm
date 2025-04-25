@@ -114,6 +114,58 @@ class StreamingCausalDataset(torch.utils.data.IterableDataset, IterableDocument)
 
 
 
+class IterableCausalDataset(torch.utils.data.IterableDataset):
+    """
+    An IterableDataset for causal language modeling.
+    """
+    def __init__(self, directory: str, tokenizer, n_ctx: int, batch: int) -> None:
+        self.directory = directory
+        self.tokenizer = tokenizer
+        self.n_ctx = n_ctx
+        self.batch = batch
+
+    def __iter__(self) -> Generator[Tuple[torch.Tensor, torch.Tensor], None, None]:
+        # Iterate over grouped windows of sentences
+        for sentences in CausalDataset.batch_stream(self.directory, self.batch):
+            text = " ".join(sentences)
+            ids = self.tokenizer.encode(text)
+
+            # Slide over token IDs in non-overlapping blocks
+            for i in range(0, len(ids) - 1, self.n_ctx):
+                block = ids[i : i + self.n_ctx + 1]
+                if len(block) < 2:
+                    continue
+                input_ids = block[:-1]
+                target_ids = block[1:]
+                yield (
+                    torch.tensor(input_ids, dtype=torch.long),
+                    torch.tensor(target_ids, dtype=torch.long),
+                )
+
+    @staticmethod
+    def sentence_stream(directory: str) -> Generator[str, None, None]:
+        for fn in sorted(os.listdir(directory)):
+            if not fn.endswith('.txt'):
+                continue
+            path = os.path.join(directory, fn)
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    s = line.strip()
+                    if s:
+                        yield s
+
+    @staticmethod
+    def batch_stream(directory: str, num_sentences: int) -> Generator[List[str], None, None]:
+        sentences: List[str] = []
+        for sentence in CausalDataset.sentence_stream(directory):
+            sentences.append(sentence)
+            if len(sentences) == num_sentences:
+                yield sentences
+                sentences = []
+        if sentences:
+            yield sentences
+
+
 class MaskedDataset(torch.utils.data.Dataset, Document):
     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
         self.mask_prob = mask_prob
