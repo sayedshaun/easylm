@@ -197,6 +197,8 @@ class Trainer:
 
 
     def dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
+        if dataset is None:
+            return None
         if isinstance(dataset, DataLoader):
             return dataset
         else:
