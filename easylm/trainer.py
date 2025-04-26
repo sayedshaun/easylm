@@ -3,9 +3,9 @@ import shutil
 import yaml
 import torch
 from tqdm import tqdm
-from typing import Union
+from typing import Any, Union
 import torch.nn.functional as F
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, IterableDataset
 from dataclasses import asdict
 from easylm.model.bert import BertModel
 from torch.amp import autocast, GradScaler
@@ -24,7 +24,8 @@ class Trainer:
             config: TrainingConfig,
             tokenizer: Tokenizer,
             optimizer: Union[torch.optim.Optimizer, None] = None, 
-            model_name: str = "my_pretrained_model"
+            model_name: str = "my_pretrained_model",
+            collate_fn: Union[None, callable] = None,
     ) -> None:
         self.config = config
         self.model = model
@@ -32,6 +33,7 @@ class Trainer:
         self.optimizer = optimizer
         self.tokenizer = tokenizer
         self.model_name = model_name
+        self.collate_fn = collate_fn
         if os.path.exists(self.model_name):
             shutil.rmtree(self.model_name)
         os.makedirs(self.model_name, exist_ok=True)
@@ -199,16 +201,20 @@ class Trainer:
                     self.logs["val_loss"].append(loss.item())
 
 
-    def dataloader(self, dataset: Union[Dataset, DataLoader]) -> DataLoader:
-        if isinstance(dataset, Dataset):
+    def dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
+        if isinstance(dataset, DataLoader):
+            return dataset
+        else:
             return DataLoader(
                 dataset=dataset, 
                 batch_size=self.batch_size, 
                 num_workers=self.num_workers, 
+                pin_memory=self.pin_memory,
                 shuffle=self.shuffle_train_data,
-                pin_memory=self.pin_memory
+                collate_fn=self.collate_fn,
+                drop_last=True,
             )
-        return dataset
+        
 
     def save(self):
         current_loss = self.logs["train_loss"][-1]  # Get latest loss
