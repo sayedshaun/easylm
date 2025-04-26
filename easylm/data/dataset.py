@@ -126,7 +126,7 @@ class IterableCausalDataset(torch.utils.data.IterableDataset):
 
     def __iter__(self) -> Generator[Tuple[torch.Tensor, torch.Tensor], None, None]:
         # Iterate over grouped windows of sentences
-        for sentences in CausalDataset.batch_stream(self.directory, self.batch):
+        for sentences in IterableCausalDataset.batch_stream(self.directory, self.batch):
             text = " ".join(sentences)
             ids = self.tokenizer.encode(text)
 
@@ -157,13 +157,20 @@ class IterableCausalDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def batch_stream(directory: str, num_sentences: int) -> Generator[List[str], None, None]:
         sentences: List[str] = []
-        for sentence in CausalDataset.sentence_stream(directory):
+        for sentence in IterableCausalDataset.sentence_stream(directory):
             sentences.append(sentence)
             if len(sentences) == num_sentences:
                 yield sentences
                 sentences = []
         if sentences:
             yield sentences
+
+    @staticmethod
+    def collate_fn(batch):
+        inputs, targets = zip(*batch)  # Unpack the batch into inputs and targets
+        inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=0)
+        targets = torch.nn.utils.rnn.pad_sequence(targets, batch_first=True, padding_value=-100)
+        return inputs, targets
 
 
 class MaskedDataset(torch.utils.data.Dataset, Document):
