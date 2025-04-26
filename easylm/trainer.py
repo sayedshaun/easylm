@@ -4,16 +4,11 @@ import yaml
 import torch
 from tqdm import tqdm
 from typing import Any, Union
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader, IterableDataset
+from torch.utils.data import DataLoader
 from dataclasses import asdict
-from easylm.model.bert import BertModel
 from torch.amp import autocast, GradScaler
-#from easylm.data.dataloader import DataLoader
 from torch.utils.data import DataLoader
 from easylm.config import TrainingConfig
-from easylm.model.gpt import GPTModel
-from easylm.model.llama import LlamaModel
 from easylm.tokenizer import Tokenizer
 
 

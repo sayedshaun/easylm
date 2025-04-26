@@ -10,6 +10,8 @@ import torchvision
 from platformdirs import user_cache_dir
 from easylm.tokenizer import Tokenizer
 from typing import List, Optional, Tuple, Generator, Union
+from torch.nn.utils.rnn import pad_sequence
+
 
 random.seed(42)
 torch.manual_seed(42)
@@ -168,8 +170,8 @@ class IterableCausalDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def collate_fn(batch):
         inputs, targets = zip(*batch)  # Unpack the batch into inputs and targets
-        inputs = torch.nn.utils.rnn.pad_sequence(inputs, batch_first=True, padding_value=0)
-        targets = torch.nn.utils.rnn.pad_sequence(targets, batch_first=True, padding_value=-100)
+        inputs = pad_sequence(inputs, batch_first=True, padding_value=0)
+        targets = pad_sequence(targets, batch_first=True, padding_value=-100)
         return inputs, targets
 
 
