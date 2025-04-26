@@ -108,15 +108,16 @@ class Trainer:
         global_step = 1
         accumulated_loss = 0.0  # Track accumulated loss
         
-        with tqdm(total=self.epochs, desc="Training") as pbar:
+        with tqdm(total=self.epochs, desc=f"Training | Step {global_step}") as pbar:
             for epoch in range(1, self.epochs + 1):
                 for batch in self.train_data:
+                    pbar.set_description(f"Training | Step {global_step}")
                     with autocast(
                         device_type=self.device, 
                         dtype=self.precision, 
                         enabled=self.enable_amp
                         ):
-                        loss = self.train_step(self.model, batch, self.device)
+                        loss = self.step(self.model, batch, self.device)
                         loss = loss / self.gradient_accumulation_steps
                     
                     accumulated_loss += loss.item()
@@ -139,9 +140,10 @@ class Trainer:
                             self.logs["epoch"] = epoch
                             pbar.set_postfix(
                                 step=global_step, 
-                                loss=f"{avg_loss:.4f}", 
-                                best_loss=f"{self.logs['best_loss']:.4f}"
-                                )
+                                train_loss=f"{avg_loss:.4f}", 
+                                best_train_loss=f"{self.logs['best_loss']:.4f}",
+                                val_loss=f"{self.logs['val_loss'][-1]:.4f}" if self.val_data is not None else 'N/A',
+                            )
 
                         # Save model
                         if self.save_steps is not None and global_step % self.save_steps == 0:
@@ -151,13 +153,15 @@ class Trainer:
 
                     # Validation
                     if global_step % self.validation_steps == 0 and self.val_data is not None:
+                        pbar.set_description(f"Validating")
                         self.evaluate()
                         self.model.train()
+                        pbar.set_description(f"Training | Step {global_step}")
                   
                 pbar.update(1)
 
     @staticmethod        
-    def train_step(
+    def step(
         model: torch.nn.Module, 
         batch, 
         device: Union[torch.device, str] = torch.device
@@ -168,31 +172,18 @@ class Trainer:
         outputs = model(inputs, targets)
         loss = outputs.loss
         return loss
-    
-
-    @staticmethod
-    def validation_step(
-        model: torch.nn.Module, 
-        batch, 
-        device: Union[torch.device, str] = torch.device
-        ) ->torch.FloatTensor:
-        inputs, targets = batch
-        inputs = inputs.to(device)
-        targets = targets.to(device)
-        outputs = model(inputs)
-        return outputs.loss
 
 
     def evaluate(self) -> None:
         self.model.eval()
-        for batch in tqdm(self.val_data , desc="Validating"):
+        for batch in self.val_data:
             with torch.no_grad():
                 with autocast(
                     device_type=self.device, 
                     dtype=self.precision, 
                     enabled=self.enable_amp
                     ):
-                    loss = self.validation_step(self.model, batch, self.device)
+                    loss = self.step(self.model, batch, self.device)
                     self.logs["val_loss"].append(loss.item())
 
 
