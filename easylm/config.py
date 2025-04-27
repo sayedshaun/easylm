@@ -71,6 +71,9 @@ class TrainingConfig:
     num_workers: Union[int, None] = 0
     shuffle_data: bool = False
     pin_memory: bool = False
+    num_checkpoints: int = 1
+    report_to_wandb: Union[bool, None] = None
+    wandb_project: Union[str, None] = "easylm"
 
 
 
