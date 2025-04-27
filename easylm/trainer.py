@@ -2,6 +2,7 @@ import os
 import shutil
 import yaml
 import torch
+import wandb
 from tqdm import tqdm
 from typing import Any, Union
 from torch.utils.data import DataLoader
@@ -29,8 +30,8 @@ class Trainer:
         self.tokenizer = tokenizer
         self.model_name = model_name
         self.collate_fn = collate_fn
-        if os.path.exists(self.model_name):
-            shutil.rmtree(self.model_name)
+        # if os.path.exists(self.model_name):
+        #     shutil.rmtree(self.model_name)
         os.makedirs(self.model_name, exist_ok=True)
         #===============================================
 
@@ -47,10 +48,13 @@ class Trainer:
         self.save_steps = config.save_steps
         self.num_workers = config.num_workers
         self.seed = config.seed
+        self.num_checkpoints = config.num_checkpoints
         self.shuffle_train_data = config.shuffle_data
         self.pin_memory = config.pin_memory
         self.scaler = GradScaler(device=self.device)
         self.enable_amp = True if torch.cuda.is_available() else False
+        self.report_to_wandb = config.report_to_wandb
+        self.wandb_project = config.wandb_project
 
         torch.manual_seed(self.seed) if self.seed is not None else None
         torch.cuda.manual_seed(self.seed) if self.seed is not None else None
@@ -100,16 +104,24 @@ class Trainer:
             "best_loss": float("inf"),
         }
         self.model.to(self.device)
+
+        if self.report_to_wandb:
+            wandb.init(project=self.wandb_project, name=self.model_name)
+            #wandb.config.update(asdict(self.config))
+            wandb.watch(self.model, log="all", log_graph=False, log_freq=self.logging_steps)
+
         self.save_config()
 
 
     def train(self):
         self.model.train()
-        global_step = 1
+        global_step = 1 if self.logs["global_step"] == 0 else self.logs["global_step"]
         accumulated_loss = 0.0  # Track accumulated loss
-        
+        start_epoch = self.logs["epoch"]
         with tqdm(total=self.epochs, desc=f"Training | Step {global_step}") as pbar:
-            for epoch in range(1, self.epochs + 1):
+            pbar.update(self.logs["epoch"]) if self.logs["epoch"] > 0 else None
+            for epoch in range(start_epoch, self.epochs + 1):
+                self.logs["epoch"] = epoch
                 for batch in self.train_data:
                     pbar.set_description(f"Training | Step {global_step}")
                     with autocast(
@@ -145,6 +157,18 @@ class Trainer:
                                 val_loss=f"{self.logs['val_loss'][-1]:.4f}" if self.val_data is not None else 'N/A',
                             )
 
+                            if self.report_to_wandb:
+                                wandb.log(
+                                    data={
+                                        "train/train_loss": avg_loss,
+                                        "train/best_train_loss": self.logs["best_loss"],
+                                        "validation/val_loss": self.logs["val_loss"][-1] if self.val_data is not None else None,
+                                        "train/global_step": global_step,
+                                        "train/epoch": epoch,
+                                        },
+                                    step=global_step
+                                )
+
                         # Save model
                         if self.save_steps is not None and global_step % self.save_steps == 0:
                             self.save()
@@ -159,6 +183,23 @@ class Trainer:
                         pbar.set_description(f"Training | Step {global_step}")
                   
                 pbar.update(1)
+
+        if self.report_to_wandb:
+            wandb.finish()
+    
+    def from_checkpoint(self, checkpoint_path: str) -> None:
+        if os.path.exists(checkpoint_path):
+            model_file = os.path.join(checkpoint_path, "pytorch_model.pt")  # Specify the model file
+            self.model.load_state_dict(torch.load(model_file))  # Load the model state dict
+            self.optimizer.load_state_dict(torch.load(os.path.join(checkpoint_path, "optimizer.pt")))
+            self.scaler.load_state_dict(torch.load(os.path.join(checkpoint_path, "scaler.pt")))
+            self.logs = torch.load(os.path.join(checkpoint_path, "logs.pt"))
+
+            print(f"Model loaded from {checkpoint_path}")
+            #self.train()
+        else:
+            raise ValueError(f"Checkpoint path {checkpoint_path} does not exist")
+
 
     @staticmethod        
     def step(
@@ -205,10 +246,28 @@ class Trainer:
         
 
     def save(self):
-        current_loss = self.logs["train_loss"][-1]  # Get latest loss
+        current_loss = self.logs["train_loss"][-1]
         if current_loss < self.logs["best_loss"]:
-            self.logs["best_loss"] = current_loss  # Update best loss
+            self.logs["best_loss"] = current_loss
             torch.save(self.model.state_dict(), f"{self.model_name}/pytorch_model.pt")  
+
+            # Save all snapshots in the checkpoint directory
+            ckpt_dir = os.path.join(self.model_name, f"checkpoint-{self.logs['global_step']}")
+            os.makedirs(ckpt_dir, exist_ok=True)
+            torch.save(self.model.state_dict(), os.path.join(ckpt_dir, "pytorch_model.pt"))
+            torch.save(self.optimizer.state_dict(), os.path.join(ckpt_dir, "optimizer.pt"))
+            torch.save(self.scaler.state_dict(), os.path.join(ckpt_dir, "scaler.pt"))
+            torch.save(self.logs, os.path.join(ckpt_dir, "logs.pt"))
+
+            # Keep n latest checkpoints
+            checkpoints = sorted(
+            [d for d in os.listdir(self.model_name) if d.startswith("checkpoint-") and "-" in d],
+            key=lambda x: int(x.split("-")[1]),
+            reverse=True
+            )
+            for i, checkpoint in enumerate(checkpoints):
+                if i >= self.num_checkpoints:
+                    shutil.rmtree(os.path.join(self.model_name, checkpoint))
 
 
     def save_config(self):
@@ -217,6 +276,8 @@ class Trainer:
         for key, value in asdict(self.config).items():
             if value is not None and key != "train_data" and key != "val_data" and key != "test_data":
                 trainer_config_dict[key] = value
+            elif key == "model":
+                trainer_config_dict[key] = str(self.model.__class__.__name__)
             elif value is None:
                 trainer_config_dict[key] = "None"
         
@@ -232,5 +293,8 @@ class Trainer:
 
         with open(f"{self.model_name}/model_config.yaml", "w") as f:
             yaml.dump(model_config_dict, f)
-
+        if self.report_to_wandb:
+            trainer_config_dict["model"] = model_config_dict
+            model_config_dict["architecture"] = str(self.model.__class__.__name__)
+            wandb.config.update(trainer_config_dict)
         self.tokenizer.save(path=self.model_name)
