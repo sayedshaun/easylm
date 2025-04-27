@@ -14,16 +14,16 @@ pip install git+https://github.com/sayedshaun/easylm.git
 
 ```python
 from easylm.model import LlamaModel
-from easylm.data import CausalLMDataset
+from easylm.data import IterableCausalDataset
 from easylm.tokenizer import Tokenizer
 from easylm.config import TrainingConfig, LlamaConfig
 from easylm.trainer import Trainer
 from easylm.utils import trainable_parameters
 
 
-data_path = "data"
+data_path = "data_directory"
 tokenizer = Tokenizer(data_path, vocab_size=5000)
-dataset = CausalLMDataset(data_path, tokenizer, max_seq_len=50)
+dataset = IterableCausalDataset(data_path, tokenizer, n_ctx=50, batch=10000)
 model = LlamaModel(
     LlamaConfig(
         vocab_size=tokenizer.vocab_size,
@@ -39,16 +39,20 @@ trainer = Trainer(
     model=model,
     tokenizer=tokenizer,
     model_name="nano-llama",
+    collate_fn=IterableCausalDataset.collate_fn,
     config=TrainingConfig(
         train_data=dataset,
         learning_rate=1e-4,
-        epochs=10,
+        epochs=5,
         batch_size=8,
         device="cuda",
-        logging_steps=10
+        logging_steps=100,
+        num_checkpoints=3,
+        report_to_wandb=True,
     )
 )
 print(trainable_parameters(model))
+trainer.from_checkpoint("nano-llama/checkpoint-200")
 trainer.train()
 ```
 
@@ -57,6 +61,7 @@ trainer.train()
 Once the model is trained the pretrained dicretory will looks like this:
 ```
 nano-llama/
+    ├── /checkpoint-200
     ├── train_config.yaml
     ├── model_config.yaml
     ├── pytorch_model.pt
