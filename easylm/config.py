@@ -74,6 +74,7 @@ class TrainingConfig:
     num_checkpoints: int = 1
     report_to_wandb: Union[bool, None] = None
     wandb_project: Union[str, None] = "easylm"
+    distributed_backend: Union[str, None] = None
 
 
 

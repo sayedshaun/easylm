@@ -15,14 +15,14 @@ from easylm.tokenizer import Tokenizer
 
 class Trainer:
     def __init__(
-            self, 
-            model: torch.nn.Module, 
-            config: TrainingConfig,
-            tokenizer: Tokenizer,
-            optimizer: Union[torch.optim.Optimizer, None] = None, 
-            model_name: str = "my_pretrained_model",
-            collate_fn: Union[None, callable] = None,
-    ) -> None:
+        self, 
+        model: torch.nn.Module, 
+        config: TrainingConfig,
+        tokenizer: Tokenizer,
+        optimizer: Union[torch.optim.Optimizer, None] = None, 
+        model_name: str = "my_pretrained_model",
+        collate_fn: Union[None, callable] = None,
+        ) -> None:
         self.config = config
         self.model = model
         self.device = config.device
@@ -55,6 +55,7 @@ class Trainer:
         self.enable_amp = True if torch.cuda.is_available() else False
         self.report_to_wandb = config.report_to_wandb
         self.wandb_project = config.wandb_project
+        self.distributed_backend = config.distributed_backend
 
         torch.manual_seed(self.seed) if self.seed is not None else None
         torch.cuda.manual_seed(self.seed) if self.seed is not None else None
@@ -91,9 +92,9 @@ class Trainer:
                 eps=self.lr_epsilon
                 )
 
-        self.train_data = self.dataloader(config.train_data)
-        self.val_data = self.dataloader(config.val_data)
-        self.test_data = self.dataloader(config.test_data)
+        self.train_data = self._created_dataloader(config.train_data)
+        self.val_data = self._created_dataloader(config.val_data)
+        self.test_data = self._created_dataloader(config.test_data)
 
         
         self.logs = {
@@ -107,11 +108,52 @@ class Trainer:
 
         if self.report_to_wandb:
             wandb.init(project=self.wandb_project, name=self.model_name)
-            #wandb.config.update(asdict(self.config))
             wandb.watch(self.model, log="all", log_graph=False, log_freq=self.logging_steps)
 
         self.save_config()
 
+
+        #==================================================================================================
+        if self.distributed_backend == "ddp":
+            self._trigger_ddp()
+        elif self.distributed_backend == "dp":
+            self._trigger_dp()
+        elif self.distributed_backend is None:
+            pass
+        else:
+            raise ValueError(f"Invalid distributed backend: {self.distributed_backend}, must be one of ['ddp', 'dp', None]")
+
+    
+    def _trigger_ddp(self):
+        """
+        This method will be trigger for DistributedDataParallel (DDP) training.
+        """
+        self.rank = int(os.environ["RANK"])
+        self.world_size = int(os.environ["WORLD_SIZE"])
+        self.local_rank = int(os.environ["LOCAL_RANK"])
+        torch.cuda.set_device(self.local_rank)
+        self.device = torch.device("cuda", self.local_rank)
+        torch.distributed.init_process_group(
+            backend="nccl",
+            init_method="env://"
+        )
+        self.model = torch.nn.parallel.DistributedDataParallel(
+            self.model, 
+            device_ids=[self.local_rank], 
+            output_device=self.local_rank
+            )
+        return self.model
+    
+
+    def _trigger_dp(self):
+        """
+        This method will be trigger for DataParallel (DP) training.
+        """
+        device_count = torch.cuda.device_count()
+        self.model = torch.nn.DataParallel(self.model, device_ids=list(range(device_count)))
+        return self.model
+
+        
 
     def train(self):
         self.model.train()
@@ -186,6 +228,9 @@ class Trainer:
 
         if self.report_to_wandb:
             wandb.finish()
+        if self.distributed_backend == "ddp":
+            torch.distributed.destroy_process_group()
+
     
     def from_checkpoint(self, checkpoint_path: str) -> None:
         if os.path.exists(checkpoint_path):
@@ -228,33 +273,47 @@ class Trainer:
                     self.logs["val_loss"].append(loss.item())
 
 
-    def dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
+    def _created_dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
         if dataset is None:
             return None
+        
         if isinstance(dataset, DataLoader):
             return dataset
-        else:
-            return DataLoader(
-                dataset=dataset, 
-                batch_size=self.batch_size, 
-                num_workers=self.num_workers, 
-                pin_memory=self.pin_memory,
-                shuffle=self.shuffle_train_data,
-                collate_fn=self.collate_fn,
-                drop_last=True,
-            )
+
+        sampler = None
+        shuffle = self.shuffle_train_data
+
+        if self.distributed_backend == "ddp":
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+            shuffle = False  # Shuffling is handled by the sampler
+
+        return torch.utils.data.DataLoader(
+            dataset=dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            shuffle=shuffle,
+            sampler=sampler,
+            collate_fn=self.collate_fn,
+            drop_last=True,
+        )
         
 
     def save(self):
+        if self.distributed_backend == "ddp" or self.distributed_backend == "dp":
+            model_state_dict = self.model.module.state_dict()
+        else:
+            model_state_dict = self.model.state_dict()
+
         current_loss = self.logs["train_loss"][-1]
         if current_loss < self.logs["best_loss"]:
             self.logs["best_loss"] = current_loss
-            torch.save(self.model.state_dict(), f"{self.model_name}/pytorch_model.pt")  
+            torch.save(model_state_dict, f"{self.model_name}/pytorch_model.pt")  
 
             # Save all snapshots in the checkpoint directory
             ckpt_dir = os.path.join(self.model_name, f"checkpoint-{self.logs['global_step']}")
             os.makedirs(ckpt_dir, exist_ok=True)
-            torch.save(self.model.state_dict(), os.path.join(ckpt_dir, "pytorch_model.pt"))
+            torch.save(model_state_dict, os.path.join(ckpt_dir, "pytorch_model.pt"))
             torch.save(self.optimizer.state_dict(), os.path.join(ckpt_dir, "optimizer.pt"))
             torch.save(self.scaler.state_dict(), os.path.join(ckpt_dir, "scaler.pt"))
             torch.save(self.logs, os.path.join(ckpt_dir, "logs.pt"))
