@@ -99,8 +99,8 @@ class PositionalEmbeddings(nn.Module):
         self.hidden_size = hidden_size
         self.seq_len = seq_len
         self.dropout = dropout
-        self.word_encoding = Embedding(vocab_size, hidden_size)
-        self.position_encoding = Embedding(seq_len, hidden_size)
+        self.word_encoding = nn.Embedding(vocab_size, hidden_size)
+        self.position_encoding = nn.Embedding(seq_len, hidden_size)
 
     def forward(self, X:torch.Tensor)->torch.Tensor:
         if X.shape[1] > self.seq_len:
@@ -121,10 +121,10 @@ class TransformerMultiheadAttention(nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert self.head_dim * num_heads == hidden_size, "hidden_size must be divisible by num_heads"
-        self.q_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.k_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.v_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.out_proj = Linear(hidden_size,hidden_size, bias=True)
+        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size,hidden_size, bias=True)
 
     def forward(self, Q:torch.Tensor, K:torch.Tensor, V:torch.Tensor, mask: Union[torch.Tensor, None]=None)->torch.Tensor:
         N, L, D = Q.shape
@@ -165,9 +165,9 @@ class LayerNorm(nn.Module):
 class FeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(FeedForward, self).__init__()
-        self.fc1 = Linear(hidden_size, intermediate_size)
-        self.act = ReLU()
-        self.fc2 = Linear(intermediate_size, hidden_size)
+        self.fc1 = nn.Linear(hidden_size, intermediate_size)
+        self.act = nn.ReLU()
+        self.fc2 = nn.Linear(intermediate_size, hidden_size)
         self.dropout = Dropout(dropout)
     
     def forward(self, X: torch.Tensor) -> torch.Tensor:
@@ -183,8 +183,8 @@ class TransformerDecoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerDecoderBlock, self).__init__()
         self.mha = TransformerMultiheadAttention(hidden_size, num_heads)
-        self.norm_1 = LayerNorm(hidden_size, norm_epsilon)
-        self.norm_2 = LayerNorm(hidden_size, norm_epsilon)
+        self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
+        self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
     def forward(self, X:torch.Tensor, mask: Union[torch.Tensor, None] = None)->torch.Tensor:
@@ -198,8 +198,8 @@ class TransformerEncoderBlock(nn.Module):
     def __init__(self, hidden_size: int, num_heads: int, norm_epsilon: float, dropout: float) -> None:
         super(TransformerEncoderBlock, self).__init__()
         self.mha = TransformerMultiheadAttention(hidden_size, num_heads)
-        self.norm_1 = LayerNorm(hidden_size, norm_epsilon)
-        self.norm_2 = LayerNorm(hidden_size, norm_epsilon)
+        self.norm_1 = nn.LayerNorm(hidden_size, norm_epsilon)
+        self.norm_2 = nn.LayerNorm(hidden_size, norm_epsilon)
         self.mlp = FeedForward(hidden_size, hidden_size * 4, dropout)
 
     def forward(self, X:torch.Tensor, padding_mask: Union[torch.Tensor, None] = None)->torch.Tensor:
@@ -227,10 +227,10 @@ class RMSNorm(nn.Module):
 class LlamaFeedForward(torch.nn.Module):
     def __init__(self, hidden_size: int, intermediate_size: int, dropout: float) -> None:
         super(LlamaFeedForward, self).__init__()
-        self.fc1 = Linear(hidden_size, intermediate_size)
-        self.act = SiLU()
-        self.fc2 = Linear(intermediate_size, hidden_size)
-        self.dropout = Dropout(dropout)
+        self.fc1 = nn.Linear(hidden_size, intermediate_size)
+        self.act = nn.SiLU()
+        self.fc2 = nn.Linear(intermediate_size, hidden_size)
+        self.dropout = nn.Dropout(dropout)
     
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         X = self.fc1(X)
@@ -248,10 +248,10 @@ class LlamaAttention(torch.nn.Module):
         self.num_heads = num_heads
         self.head_dim = hidden_size // num_heads
         assert hidden_size % num_heads == 0, "Hidden size must be divisible by number of heads"
-        self.query_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.key_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.value_proj = Linear(hidden_size, hidden_size, bias=False)
-        self.out_proj = Linear(hidden_size, hidden_size, bias=True)
+        self.query_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.key_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.value_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=True)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         N, S, H = X.shape # batch, seq_len, hidden_size
@@ -312,10 +312,10 @@ class LlamaBlock(nn.Module):
         self.norm_epsilon = norm_epsilon
         self.attention = LlamaAttention(hidden_size, num_heads)
         self.mlp = LlamaFeedForward(hidden_size, hidden_size * 4, dropout)
-        self.norm1 = RMSNorm(hidden_size, norm_epsilon)
-        self.norm2 = RMSNorm(hidden_size, norm_epsilon)
-        self.norm3 = RMSNorm(hidden_size, norm_epsilon)
-        self.dropout = Dropout(dropout)
+        self.norm1 = nn.RMSNorm(hidden_size, norm_epsilon)
+        self.norm2 = nn.RMSNorm(hidden_size, norm_epsilon)
+        self.norm3 = nn.RMSNorm(hidden_size, norm_epsilon)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, X: torch.Tensor, position_ids: torch.Tensor, mask: Union[torch.Tensor, None] = None) -> torch.Tensor:
         norm_1 = self.norm1(X)
@@ -358,18 +358,18 @@ class VITImageClassifier(torch.nn.Module):
             in_channels=config.color_channels,
             embed_dim=config.hidden_size
         )
-        self.pos_embed = torch.nn.Parameter(torch.randn(1, self.patch_embed.num_patches + 1, config.hidden_size))
-        self.cls_token = torch.nn.Parameter(torch.randn(1, 1, config.hidden_size))
-        self.blocks = torch.nn.ModuleList([
+        self.pos_embed = nn.Parameter(torch.randn(1, self.patch_embed.num_patches + 1, config.hidden_size))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, config.hidden_size))
+        self.blocks = nn.ModuleList([
             TransformerEncoderBlock(
                 d_model=config.hidden_size, 
                 n_heads=config.num_heads,
                 norm_epsilon=config.norm_epsilon,
                 dropout=config.dropout) for _ in range(config.num_layers)
         ])
-        self.norm = LayerNorm(config.hidden_size, config.norm_epsilon)
-        self.dropout = Dropout(0.1)
-        self.classifier = Linear(config.hidden_size, config.num_classes)
+        self.norm = nn.LayerNorm(config.hidden_size, config.norm_epsilon)
+        self.dropout = nn.Dropout(config.dropout)
+        self.classifier = nn.Linear(config.hidden_size, config.num_classes)
 
     def forward(self, inputs: torch.Tensor, labels: Union[torch.Tensor, None] = None) -> torch.Tensor:
         B = inputs.shape[0]
