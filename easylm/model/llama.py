@@ -30,7 +30,7 @@ class LlamaModel(nn.Module):
         self.linear = Linear(config.hidden_size, config.vocab_size)
     
         self.apply(self._init_weights)
-        
+
 
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear, nn.Embedding)):

@@ -3,7 +3,8 @@ import torch
 import torch.nn.functional as F
 import yaml
 from easylm.config import GPTConfig
-from easylm.nn import LayerNorm, Linear, TransformerDecoderBlock, PositionalEmbeddings
+from easylm.nn import TransformerDecoderBlock, PositionalEmbeddings
+from torch.nn import LayerNorm, Linear
 from easylm.utils import CausalModelOutput
 
 
@@ -32,6 +33,18 @@ class GPTModel(torch.nn.Module):
         self.dropout = torch.nn.Dropout(config.dropout)
         self.linear = Linear(config.hidden_size, config.vocab_size)
 
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+            if isinstance(module, torch.nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, torch.nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+            
+
     def forward(
             self: "GPTModel", 
             input_ids: torch.Tensor, 
@@ -56,14 +69,14 @@ class GPTModel(torch.nn.Module):
         return mask
 
     def generate(
-            self, 
-            input_ids: torch.Tensor, 
-            max_new_tokens: int = 20, 
-            context_size: int = 1, 
-            temperature: float = 1.0, 
-            top_k: Union[int, None] = None, 
-            eos_id: Union[int, None] = None
-        ) -> torch.Tensor:    
+        self, 
+        input_ids: torch.Tensor, 
+        max_new_tokens: int = 20, 
+        context_size: int = 1, 
+        temperature: float = 0.7, 
+        top_k: Union[int, None] = None, 
+        eos_id: Union[int, None] = None) -> torch.Tensor:  
+          
         for _ in range(max_new_tokens):           
             idx_cond = input_ids[:, -context_size:] 
             with torch.no_grad():    
