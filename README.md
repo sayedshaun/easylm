@@ -28,7 +28,7 @@ from langtrain.data import IterableCausalDataset
 from langtrain.tokenizer import Tokenizer
 from langtrain.config import TrainingConfig, LlamaConfig
 from langtrain.trainer import Trainer
-from langtrain.utils import trainable_parameters
+from langtrain.utils import trainable_parameters, collate_fn
 
 
 data_path = "data_directory"
@@ -49,7 +49,7 @@ trainer = Trainer(
     model=model,
     tokenizer=tokenizer,
     model_name="nano-llama",
-    collate_fn=IterableCausalDataset.collate_fn,
+    collate_fn=collate_fn,
     config=TrainingConfig(
         train_data=dataset,
         learning_rate=1e-4,
@@ -65,9 +65,19 @@ print(trainable_parameters(model))
 trainer.from_checkpoint("nano-llama/checkpoint-200")
 trainer.train()
 ```
+ If you want to train multigpu or multinode, just pass the `distributed_backend`
+
+```python
+
+TrainerConfig(
+    ...,
+    distributed_backend="ddp",
+)
+torchrun --nproc_per_node=2 --nnodes=2 your_script.py # Run this command
+```
 
 
-### Pretrained Detailes:
+## Pretrained Detailes:
 Once the model is trained the pretrained dicretory will looks like this:
 ```
 nano-llama/
@@ -79,7 +89,7 @@ nano-llama/
     └── VOCAB.vocab
 ```
 
-### Inference
+## Inference
 
 ```python
 from langtrain.model import LlamaModel
