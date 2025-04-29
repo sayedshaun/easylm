@@ -23,12 +23,12 @@ pip install git+https://github.com/sayedshaun/langtrain.git
 ### Training
 
 ```python
-from easylm.model import LlamaModel
-from easylm.data import IterableCausalDataset
-from easylm.tokenizer import Tokenizer
-from easylm.config import TrainingConfig, LlamaConfig
-from easylm.trainer import Trainer
-from easylm.utils import trainable_parameters
+from langtrain.model import LlamaModel
+from langtrain.data import IterableCausalDataset
+from langtrain.tokenizer import Tokenizer
+from langtrain.config import TrainingConfig, LlamaConfig
+from langtrain.trainer import Trainer
+from langtrain.utils import trainable_parameters
 
 
 data_path = "data_directory"
@@ -82,8 +82,8 @@ nano-llama/
 ### Inference
 
 ```python
-from easylm.model import LlamaModel
-from easylm.tokenizer import Tokenizer
+from langtrain.model import LlamaModel
+from langtrain.tokenizer import Tokenizer
 
 tokenizer = Tokenizer.from_pretrained("nano-llama")
 model = LlamaModel.from_pretrained("nano-llama")
