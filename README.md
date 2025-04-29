@@ -4,38 +4,32 @@
 
 ## A python package for training Language Models from scratch with few lines of code
 
-EasyLM is a python package for training Language Models from scratch. It provides a simple interface to train large Language Models from scratch with few lines of code.
+LangTrain is a python package for training Language Models from scratch. It provides a simple interface to train large Language Models from scratch with few lines of code.
 
 ## Installation
 
-### Stable Version
+#### Stable Version
 ```bash
 pip install langtrain
 ```
 
-### Development Version
+#### Development Version
 ```bash
 pip install git+https://github.com/sayedshaun/langtrain.git
 ```
 
 ## Usage
 
-### Training
+#### Training
 
 ```python
-from langtrain.model import LlamaModel
-from langtrain.data import IterableCausalDataset
-from langtrain.tokenizer import Tokenizer
-from langtrain.config import TrainingConfig, LlamaConfig
-from langtrain.trainer import Trainer
-from langtrain.utils import trainable_parameters, collate_fn
-
+import langtrain as lt
 
 data_path = "data_directory"
-tokenizer = Tokenizer(data_path, vocab_size=5000)
-dataset = IterableCausalDataset(data_path, tokenizer, n_ctx=50, batch=10000)
-model = LlamaModel(
-    LlamaConfig(
+tokenizer = lt.tokenizer.Tokenizer(data_path, vocab_size=5000)
+dataset = lt.dataset.CausalDataset(data_path, tokenizer, n_ctx=512)
+model = lt.model.LlamaModel(
+    lt.model.LlamaConfig(
         vocab_size=tokenizer.vocab_size,
         hidden_size=128,
         num_heads=4,
@@ -45,12 +39,8 @@ model = LlamaModel(
         norm_epsilon=1e-5
     )
 )
-trainer = Trainer(
-    model=model,
-    tokenizer=tokenizer,
-    model_name="nano-llama",
-    collate_fn=collate_fn,
-    config=TrainingConfig(
+trainer = lt.trainer.Trainer(
+    config=lt.config.TrainingConfig(
         train_data=dataset,
         learning_rate=1e-4,
         epochs=5,
@@ -59,25 +49,19 @@ trainer = Trainer(
         logging_steps=100,
         num_checkpoints=3,
         report_to_wandb=True,
+        distributed_backend="ddp"
     )
+    model=model,
+    tokenizer=tokenizer,
+    model_name="nano-llama",
+    collate_fn=lt.utils.collate_fn,
 )
-print(trainable_parameters(model))
+print(lt.utils.trainable_parameters(model))
 trainer.from_checkpoint("nano-llama/checkpoint-200")
 trainer.train()
 ```
- If you want to train multigpu or multinode, just pass the `distributed_backend`
 
-```python
-
-TrainerConfig(
-    ...,
-    distributed_backend="ddp",
-)
-torchrun --nproc_per_node=2 --nnodes=2 your_script.py # Run this command
-```
-
-
-## Pretrained Detailes:
+### Pretrained Detailes:
 Once the model is trained the pretrained dicretory will looks like this:
 ```
 nano-llama/
@@ -89,15 +73,23 @@ nano-llama/
     └── VOCAB.vocab
 ```
 
-## Inference
+### Inference
 
 ```python
-from langtrain.model import LlamaModel
-from langtrain.tokenizer import Tokenizer
+import langtrain as lt
 
-tokenizer = Tokenizer.from_pretrained("nano-llama")
-model = LlamaModel.from_pretrained("nano-llama")
+tokenizer = lt.tokenizer.Tokenizer.from_pretrained("nano-llama")
+model = lt.model.LlamaModel.from_pretrained("nano-llama")
 inputs = tokenizer.encode("Sherlock Holmes")
 output = model.generate(inputs, eos_id=tokenizer.eos_token_id, max_new_tokens=50)
 tokenizer.decode(output)
 ```
+
+## Available Model Architectures to train
+
+| Model Architecture | Source Repository |
+|--------------------|--------------------------------------------|
+| GPT                | [OpenAI GPT](https://openai.com/index/language-unsupervised/) |
+| LLaMA              | [Meta LLaMA](https://arxiv.org/abs/2302.13971) |
+| BERT               | [Google BERT](https://arxiv.org/abs/1810.04805) |
+| VIT                | [Vision Transformer](https://arxiv.org/abs/2010.11929) |
