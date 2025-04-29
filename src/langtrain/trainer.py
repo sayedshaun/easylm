@@ -9,8 +9,8 @@ from typing import Any, Union
 from dataclasses import asdict
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from src.config import TrainingConfig
-from src.tokenizer import Tokenizer
+from langtrain.tokenizer import Tokenizer
+from langtrain.config import TrainingConfig
 
 
 class Trainer:
