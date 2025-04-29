@@ -13,10 +13,7 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "numpy==2.2.2",
-    "sentencepiece==0.2.0",
-    "torch",
-    "torchvision",
-    "pillow"
+    "sentencepiece==0.2.0"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -24,3 +21,6 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 keywords = ["NLP", "language model", "training", "langtrain"]
+
+[tool.setuptools.packages.find]
+where = ["."]
