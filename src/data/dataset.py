@@ -8,7 +8,7 @@ from PIL import Image
 from torchvision import transforms
 import torchvision
 from platformdirs import user_cache_dir
-from easylm.tokenizer import Tokenizer
+from src.tokenizer import Tokenizer
 from typing import List, Optional, Tuple, Generator, Union
 from torch.nn.utils.rnn import pad_sequence
 

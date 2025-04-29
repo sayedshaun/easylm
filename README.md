@@ -1,4 +1,8 @@
-# EasyLM, A python package for training Language Models from scratch
+![Python](https://img.shields.io/badge/python-3670A0?style=plastic&logo=python&logoColor=ffdd54) ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=plastic&logo=PyTorch&logoColor=white)
+
+![alt text](assets/logo.png)
+
+## A python package for training Language Models from scratch with few lines of code
 
 EasyLM is a python package for training Language Models from scratch. It provides a simple interface to train large Language Models from scratch with few lines of code.
 

@@ -4,7 +4,7 @@ from torch import nn
 from typing import Tuple, Union
 import torch.nn.functional as F
 
-from easylm.config import VITConfig
+from src.config import VITConfig
 
 class Linear(nn.Module):
     def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:

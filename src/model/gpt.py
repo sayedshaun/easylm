@@ -2,10 +2,10 @@ from typing import Union
 import torch
 import torch.nn.functional as F
 import yaml
-from easylm.config import GPTConfig
-from easylm.nn import TransformerDecoderBlock, PositionalEmbeddings
+from src.config import GPTConfig
+from src.nn import TransformerDecoderBlock, PositionalEmbeddings
 from torch.nn import LayerNorm, Linear
-from easylm.utils import CausalModelOutput
+from src.utils import CausalModelOutput
 
 
 class GPTModel(torch.nn.Module):

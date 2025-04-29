@@ -3,9 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import yaml
-from easylm.config import LlamaConfig
-from easylm.utils import CausalModelOutput
-from easylm.nn import LlamaBlock
+from src.config import LlamaConfig
+from src.utils import CausalModelOutput
+from src.nn import LlamaBlock
 from torch.nn import Dropout, Embedding, Linear, RMSNorm
 
 

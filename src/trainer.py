@@ -9,8 +9,8 @@ from typing import Any, Union
 from dataclasses import asdict
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from easylm.config import TrainingConfig
-from easylm.tokenizer import Tokenizer
+from src.config import TrainingConfig
+from src.tokenizer import Tokenizer
 
 
 class Trainer:
