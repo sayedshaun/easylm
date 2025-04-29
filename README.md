@@ -61,7 +61,7 @@ trainer.from_checkpoint("nano-llama/checkpoint-200")
 trainer.train()
 ```
 
-### Pretrained Detailes:
+#### Pretrained Detailes:
 Once the model is trained the pretrained dicretory will looks like this:
 ```
 nano-llama/
@@ -73,7 +73,7 @@ nano-llama/
     └── VOCAB.vocab
 ```
 
-### Inference
+#### Inference
 
 ```python
 import langtrain as lt
