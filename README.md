@@ -8,8 +8,14 @@ EasyLM is a python package for training Language Models from scratch. It provide
 
 ## Installation
 
+### Stable Version
 ```bash
-pip install git+https://github.com/sayedshaun/easylm.git
+pip install langtrain
+```
+
+### Development Version
+```bash
+pip install git+https://github.com/sayedshaun/langtrain.git
 ```
 
 ## Usage
