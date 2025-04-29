@@ -167,13 +167,6 @@ class IterableCausalDataset(torch.utils.data.IterableDataset):
         if sentences:
             yield sentences
 
-    @staticmethod
-    def collate_fn(batch):
-        inputs, targets = zip(*batch)  # Unpack the batch into inputs and targets
-        inputs = pad_sequence(inputs, batch_first=True, padding_value=0)
-        targets = pad_sequence(targets, batch_first=True, padding_value=-100)
-        return inputs, targets
-
 
 class MaskedDataset(torch.utils.data.Dataset, Document):
     def __init__(self, dir_or_path: str, tokenizer: Tokenizer, n_ctx: int, mask_prob: float = 0.15) -> None:
