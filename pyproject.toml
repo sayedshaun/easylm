@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "langtrain"
-version = "0.0.2"
+
+dynamic = ["version"]
+
 description = "Easy Language Model Training Library"
 readme = "README.md"
 authors = [
@@ -24,3 +26,8 @@ keywords = ["nlp", "cv", "language model", "model training", "langtrain"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools_scm]
+# optional: tweak how tags map to versions
+version_scheme = "pep440"
+local_scheme = "no-local-version"
