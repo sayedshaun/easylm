@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import yaml
 from langtrain.config._config import GPTConfig
-from langtrain.nn import TransformerDecoderBlock, PositionalEmbeddings
+from langtrain.nn._nn import TransformerDecoderBlock, PositionalEmbeddings
 from torch.nn import LayerNorm, Linear
 from langtrain.utils._utils import CausalModelOutput
 

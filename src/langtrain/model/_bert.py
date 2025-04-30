@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import yaml
 from langtrain.config import BertConfig
-from langtrain.nn import (
+from langtrain.nn._nn import (
     PositionalEmbeddings, 
     TransformerEncoderBlock, 
     LayerNorm, 
