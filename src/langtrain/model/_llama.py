@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import yaml
 from langtrain.config._config import LlamaConfig
 from langtrain.utils._utils import CausalModelOutput
-from langtrain.nn import LlamaBlock
+from langtrain.nn._nn import LlamaBlock
 from torch.nn import Dropout, Embedding, Linear, RMSNorm
 
 
