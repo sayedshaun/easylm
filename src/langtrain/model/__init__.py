@@ -1,4 +1,4 @@
 # src/model/__init__.py
-from .gpt import *
-from .llama import *
-from .bert import *
+from ._gpt import GPTModel
+from ._llama import LlamaModel
+from ._bert import BertModel
