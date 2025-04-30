@@ -1,6 +1,3 @@
 numpy==2.2.2
-pillow==11.1.0
 sentencepiece==0.2.0
 setuptools
-torch
-torchvision

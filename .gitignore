@@ -30,3 +30,7 @@ dist
 build
 *.egg
 *.whl
+*.egg-info
+*.egg
+*.whl
+*.tar
