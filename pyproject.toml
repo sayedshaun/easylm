@@ -26,8 +26,3 @@ keywords = ["nlp", "cv", "language model", "model training", "langtrain"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools_scm]
-# optional: tweak how tags map to versions
-version_scheme = "pep440"
-local_scheme = "no-local-version"
