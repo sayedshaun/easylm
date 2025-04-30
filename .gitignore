@@ -24,6 +24,12 @@ __pycache__
 *.ipynb_checkpoints
 *.ipynb
 wandb
+tests
+dist
+*.egg-info
+build
+*.egg
+*.whl
 *.egg-info
 *.egg
 *.whl
