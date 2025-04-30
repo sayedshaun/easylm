@@ -1,44 +1,32 @@
-# .github/workflows/publish-on-release.yml
-name: Publish Python Package on Release
+name: Upload Python Package
 
 on:
   release:
-    types: [published]    # runs when you publish a GitHub Release
+    types: [published]
 
 permissions:
   contents: read
 
 jobs:
   deploy:
+    # only run this job if the release was created on the 'main' branch
+    if: github.event.release.target_commitish == 'main'
     runs-on: ubuntu-latest
-    # only run if the release was created on main
-    if: ${{ github.event.release.target_commitish == 'main' }}
 
     steps:
-      # 1) Check out full history & tags
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # 2) Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.10'
-
-      # 3) Install build tools (and setuptools_scm if you’re using it)
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build setuptools_scm
-
-      # 4) Build sdist & wheel
-      - name: Build package
-        run: python -m build
-
-      # 5) Publish to PyPI
-      - name: Publish package
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+    - name: Build package
+      run: python -m build
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
