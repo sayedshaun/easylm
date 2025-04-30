@@ -4,9 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langtrain"
-
 version = "0.0.2"
-
 description = "Language Model Training Library"
 readme = "README.md"
 authors = [
