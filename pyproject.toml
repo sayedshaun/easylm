@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "langtrain"
 
-dynamic = ["version"]
+dynamic = "0.0.2"
 
-description = "Easy Language Model Training Library"
+description = "Language Model Training Library"
 readme = "README.md"
 authors = [
     { name = "Sayed Shaun", email = "sayedshaun4@gmail.com" }
