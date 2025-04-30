@@ -3,14 +3,14 @@ import shutil
 import yaml
 import torch
 import wandb
+import warnings
 from tqdm import tqdm
 from typing import Any, Union
-from torch.utils.data import DataLoader
 from dataclasses import asdict
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from easylm.config import TrainingConfig
-from easylm.tokenizer import Tokenizer
+from langtrain.tokenizer._sentencepiece import Tokenizer
+from langtrain.config._config import TrainingConfig
 
 
 class Trainer:
@@ -52,7 +52,7 @@ class Trainer:
         self.shuffle_train_data = config.shuffle_data
         self.pin_memory = config.pin_memory
         self.scaler = GradScaler(device=self.device)
-        self.enable_amp = True if torch.cuda.is_available() else False
+        self.enable_amp = True if self.device == "cuda" else False
         self.report_to_wandb = config.report_to_wandb
         self.wandb_project = config.wandb_project
         self.distributed_backend = config.distributed_backend
@@ -92,18 +92,8 @@ class Trainer:
                 eps=self.lr_epsilon
                 )
 
-        self.train_data = self._created_dataloader(config.train_data)
-        self.val_data = self._created_dataloader(config.val_data)
-        self.test_data = self._created_dataloader(config.test_data)
-
         
-        self.logs = {
-            "epoch": 0,
-            "global_step": 0,
-            "train_loss": [],
-            "val_loss": [],
-            "best_loss": float("inf"),
-        }
+        self.logs = {"epoch": 0, "global_step": 0, "train_loss": [],"val_loss": [],"best_loss": float("inf")}
         self.model.to(self.device)
 
         if self.report_to_wandb:
@@ -115,16 +105,19 @@ class Trainer:
 
         #==================================================================================================
         if self.distributed_backend == "ddp":
-            self._trigger_ddp()
+            self.model = self._trigger_ddp()
         elif self.distributed_backend == "dp":
-            self._trigger_dp()
+            self.model = self._trigger_dp()
         elif self.distributed_backend is None:
             pass
         else:
             raise ValueError(f"Invalid distributed backend: {self.distributed_backend}, must be one of ['ddp', 'dp', None]")
 
+        self.train_data = self._created_dataloader(config.train_data)
+        self.val_data = self._created_dataloader(config.val_data)
+        self.test_data = self._created_dataloader(config.test_data)
     
-    def _trigger_ddp(self):
+    def _trigger_ddp(self) -> torch.nn.Module:
         """
         This method will be trigger for DistributedDataParallel (DDP) training.
         """
@@ -132,7 +125,7 @@ class Trainer:
         self.world_size = int(os.environ["WORLD_SIZE"])
         self.local_rank = int(os.environ["LOCAL_RANK"])
         torch.cuda.set_device(self.local_rank)
-        self.device = torch.device("cuda", self.local_rank)
+        self.device = torch.device(self.device, self.local_rank)
         torch.distributed.init_process_group(
             backend="nccl",
             init_method="env://"
@@ -140,12 +133,13 @@ class Trainer:
         self.model = torch.nn.parallel.DistributedDataParallel(
             self.model, 
             device_ids=[self.local_rank], 
-            output_device=self.local_rank
+            output_device=self.local_rank,
+            find_unused_parameters=True
             )
         return self.model
     
 
-    def _trigger_dp(self):
+    def _trigger_dp(self) -> torch.nn.Module:
         """
         This method will be trigger for DataParallel (DP) training.
         """
@@ -155,11 +149,13 @@ class Trainer:
 
         
 
-    def train(self):
+    def train(self) -> None:
         self.model.train()
         global_step = 1 if self.logs["global_step"] == 0 else self.logs["global_step"]
         accumulated_loss = 0.0  # Track accumulated loss
         start_epoch = self.logs["epoch"]
+        device_type = self.device.type if isinstance(self.device, torch.device) else self.device
+
         with tqdm(total=self.epochs, desc=f"Training | Step {global_step}") as pbar:
             pbar.update(self.logs["epoch"]) if self.logs["epoch"] > 0 else None
             for epoch in range(start_epoch, self.epochs + 1):
@@ -167,7 +163,7 @@ class Trainer:
                 for batch in self.train_data:
                     pbar.set_description(f"Training | Step {global_step}")
                     with autocast(
-                        device_type=self.device, 
+                        device_type=device_type, 
                         dtype=self.precision, 
                         enabled=self.enable_amp
                         ):
@@ -234,24 +230,25 @@ class Trainer:
     
     def from_checkpoint(self, checkpoint_path: str) -> None:
         if os.path.exists(checkpoint_path):
-            model_file = os.path.join(checkpoint_path, "pytorch_model.pt")  # Specify the model file
-            self.model.load_state_dict(torch.load(model_file))  # Load the model state dict
+            model_file = os.path.join(checkpoint_path, "pytorch_model.pt")
+            state_dict = torch.load(model_file)
+
+            # Handle DDP/DP prefix if necessary
+            if self.distributed_backend == "ddp" or self.distributed_backend == "dp":
+                state_dict = {f"module.{k}": v for k, v in state_dict.items()}
+
+            self.model.load_state_dict(state_dict)  # Load the model state dict
             self.optimizer.load_state_dict(torch.load(os.path.join(checkpoint_path, "optimizer.pt")))
             self.scaler.load_state_dict(torch.load(os.path.join(checkpoint_path, "scaler.pt")))
             self.logs = torch.load(os.path.join(checkpoint_path, "logs.pt"))
 
             print(f"Model loaded from {checkpoint_path}")
-            #self.train()
         else:
             raise ValueError(f"Checkpoint path {checkpoint_path} does not exist")
 
 
     @staticmethod        
-    def step(
-        model: torch.nn.Module, 
-        batch, 
-        device: Union[torch.device, str] = torch.device
-        ) ->torch.FloatTensor:
+    def step(model: torch.nn.Module, batch, device: Union[torch.device, str]) ->torch.FloatTensor:
         inputs, targets = batch
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -284,8 +281,17 @@ class Trainer:
         shuffle = self.shuffle_train_data
 
         if self.distributed_backend == "ddp":
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
-            shuffle = False  # Shuffling is handled by the sampler
+            if not torch.distributed.is_initialized():
+                raise RuntimeError("Distributed training is not initialized.")
+            
+            if not hasattr(dataset, "__len__"):
+                warnings.warn(
+                    f"Dataset {dataset.__class__.__name__} does not have __len__ attribute. Skipping `DistributedSampler`."
+                )
+            else:
+                sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+                shuffle = False  # Shuffling is handled by the sampler
+
 
         return torch.utils.data.DataLoader(
             dataset=dataset,
@@ -299,7 +305,7 @@ class Trainer:
         )
         
 
-    def save(self):
+    def save(self) -> None:
         if self.distributed_backend == "ddp" or self.distributed_backend == "dp":
             model_state_dict = self.model.module.state_dict()
         else:
@@ -329,7 +335,7 @@ class Trainer:
                     shutil.rmtree(os.path.join(self.model_name, checkpoint))
 
 
-    def save_config(self):
+    def save_config(self) -> None:
         # Save config in a yaml file
         trainer_config_dict = {}
         for key, value in asdict(self.config).items():

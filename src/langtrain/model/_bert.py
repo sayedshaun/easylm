@@ -2,15 +2,15 @@ from typing import Tuple, Union
 import torch
 import torch.nn.functional as F
 import yaml
-from easylm.config import BertConfig
-from easylm.nn import (
+from langtrain.config import BertConfig
+from langtrain.nn import (
     PositionalEmbeddings, 
     TransformerEncoderBlock, 
     LayerNorm, 
     Dropout, 
     Linear
 )
-from easylm.utils import MaskedModelOutput
+from langtrain.utils._utils import MaskedModelOutput
 
 
 class BertModel(torch.nn.Module):

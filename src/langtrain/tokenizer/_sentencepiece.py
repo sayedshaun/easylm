@@ -10,7 +10,7 @@ import torch
 from abc import ABC
 
 
-class TextLoader(ABC):
+class TextLoader:
     def load(self, dir_or_path: str) -> str:
         if os.path.isdir(dir_or_path):
             return self.load_data_from_dir(dir_or_path)
@@ -53,8 +53,14 @@ class Tokenizer(TextLoader):
         dir_or_path: str,
         vocab_size: int,
         retrain: bool = False,
-        add_special_tokens: Optional[List[str]] = None
-    ) -> None:
+        model_type: str = "bpe",
+        add_special_tokens: Optional[List[str]] = None) -> None:
+        super().__init__()
+        self.model_type = model_type
+        self.retrain = retrain
+        self.add_special_tokens = add_special_tokens if add_special_tokens else []
+
+        
         # Get the input file(s) for training.
         self._input_data = self.load(dir_or_path)
         self._tokenizer_dir = os.path.join(user_cache_dir("easylm"), "tokenizer")
@@ -101,7 +107,9 @@ class Tokenizer(TextLoader):
             model_prefix=os.path.join(self._tokenizer_dir, self._model_prefix),
             vocab_size=self.vocab_size,
             user_defined_symbols=self.special_tokens,
-            add_dummy_prefix=False
+            add_dummy_prefix=False,
+            model_type="bpe",
+
         )
 
     def encode(self, text: str) -> torch.Tensor:
@@ -167,6 +175,6 @@ __all__ = ["Tokenizer"]
 
 
 if __name__ == "__main__":
-    tokenizer = Tokenizer(dir_or_path="data", vocab_size=1000)
+    tokenizer = Tokenizer(dir_or_path="/home/shaun/Desktop/data", vocab_size=1000, retrain=True)
     print(tokenizer.encode("Hello, world!"))
     tokenizer.save("pretrained_model")

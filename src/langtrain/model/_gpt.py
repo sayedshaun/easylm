@@ -1,60 +1,61 @@
 from typing import Union
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import yaml
-from easylm.config import LlamaConfig
-from easylm.utils import CausalModelOutput
-from easylm.nn import LlamaBlock
-from torch.nn import Dropout, Embedding, Linear, RMSNorm
+from langtrain.config._config import GPTConfig
+from langtrain.nn import TransformerDecoderBlock, PositionalEmbeddings
+from torch.nn import LayerNorm, Linear
+from langtrain.utils._utils import CausalModelOutput
 
 
-class LlamaModel(nn.Module):
-    def __init__(self, config: LlamaConfig) -> None:
-        super(LlamaModel, self).__init__()
+class GPTModel(torch.nn.Module):
+    def __init__(self, config: GPTConfig) -> None: 
+        super(GPTModel, self).__init__()
         self.config = config
-        self.embedding = Embedding(config.vocab_size, config.hidden_size)
-        self.blocks = nn.ModuleList(
+        self.embedding = PositionalEmbeddings(
+            config.vocab_size, 
+            config.hidden_size, 
+            config.max_seq_len, 
+            config.dropout
+        )
+        self.blocks = torch.nn.ModuleList(
             [
-                LlamaBlock(
+                TransformerDecoderBlock(
                     config.hidden_size, 
                     config.num_heads,
+                    config.norm_epsilon,
                     config.dropout, 
-                    config.norm_epsilon
-                    )
+                    ) 
                 for _ in range(config.num_layers)
             ]
         )
-        self.norm = RMSNorm(config.hidden_size, config.norm_epsilon)
-        self.dropout = Dropout(config.dropout)
+        self.norm = LayerNorm(config.hidden_size, config.norm_epsilon)
+        self.dropout = torch.nn.Dropout(config.dropout)
         self.linear = Linear(config.hidden_size, config.vocab_size)
-    
+
         self.apply(self._init_weights)
 
-
     def _init_weights(self, module):
-        if isinstance(module, (nn.Linear, nn.Embedding)):
+        if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
             module.weight.data.normal_(mean=0.0, std=0.02)
-            if isinstance(module, nn.Linear) and module.bias is not None:
+            if isinstance(module, torch.nn.Linear) and module.bias is not None:
                 module.bias.data.zero_()
-        elif isinstance(module, nn.LayerNorm):
+        elif isinstance(module, torch.nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
-
+            
 
     def forward(
-            self, 
+            self: "GPTModel", 
             input_ids: torch.Tensor, 
             target_ids: Union[torch.Tensor, None] = None, 
             causal_mask: bool = True
-            ) -> CausalModelOutput:
-        mask = self._make_triangle_mask(input_ids) if causal_mask else None 
-        position_ids = self._make_position_ids(input_ids)
+            )-> CausalModelOutput:
+        mask = self._make_causal_mask(input_ids) if causal_mask else None
         input_ids = self.embedding(input_ids)
         for block in self.blocks:
-            input_ids = block(input_ids, position_ids, mask)
-        input_ids = self.dropout(input_ids)
-        input_ids = self.norm(input_ids)
+            input_ids = block(input_ids, mask)
+        input_ids = self.dropout(self.norm(input_ids))
         logits = self.linear(input_ids)
         if target_ids is not None:
             loss = F.cross_entropy(logits.view(-1, logits.shape[-1]), target_ids.view(-1))
@@ -62,26 +63,20 @@ class LlamaModel(nn.Module):
         else:
             return CausalModelOutput(logits=logits)
     
-
-    def _make_position_ids(self, X: torch.Tensor) -> torch.Tensor:
-        position_ids = torch.arange(X.shape[1], device=X.device)
-        return position_ids
-    
-
-    def _make_triangle_mask(self, X: torch.Tensor) -> torch.Tensor:
-        mask = torch.tril(torch.ones(X.shape[1], X.shape[1], device=X.device))
+    def _make_causal_mask(self, input_ids: torch.Tensor)-> torch.Tensor:
+        N, S = input_ids.shape # batch, seq_len
+        mask = torch.ones(S, S, dtype=torch.bool, device=input_ids.device).tril(diagonal=0)
         return mask
-    
 
     def generate(
-            self, 
-            input_ids: torch.Tensor, 
-            max_new_tokens: int = 20, 
-            context_size: int = 1, 
-            temperature: float = 1.0, 
-            top_k: Union[int, None] = None, 
-            eos_id: Union[int, None] = None
-        ) -> torch.Tensor:  
+        self, 
+        input_ids: torch.Tensor, 
+        max_new_tokens: int = 20, 
+        context_size: int = 1, 
+        temperature: float = 0.7, 
+        top_k: Union[int, None] = None, 
+        eos_id: Union[int, None] = None) -> torch.Tensor:  
+          
         for _ in range(max_new_tokens):           
             idx_cond = input_ids[:, -context_size:] 
             with torch.no_grad():    
@@ -108,13 +103,12 @@ class LlamaModel(nn.Module):
 
         return input_ids
 
-
     @staticmethod
     def from_pretrained(preprained_path: str, device: Union[torch.device, str] = "cpu"):
         with open(f"{preprained_path}/model_config.yaml", "r") as f:
             config_dict = yaml.safe_load(f)
-        config = LlamaConfig(**config_dict)
-        model = LlamaModel(config)
+        config = GPTConfig(**config_dict)
+        model =GPTModel(config)
         model.load_state_dict(
             torch.load(
                 f"{preprained_path}/pytorch_model.pt", 

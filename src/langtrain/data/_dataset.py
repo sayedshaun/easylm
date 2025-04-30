@@ -8,7 +8,7 @@ from PIL import Image
 from torchvision import transforms
 import torchvision
 from platformdirs import user_cache_dir
-from easylm.tokenizer import Tokenizer
+from langtrain.tokenizer._sentencepiece import Tokenizer
 from typing import List, Optional, Tuple, Generator, Union
 from torch.nn.utils.rnn import pad_sequence
 
@@ -45,17 +45,17 @@ class Document:
 
 
 class CausalDataset(torch.utils.data.Dataset, Document):
-    def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int) -> None:
-        self.max_seq_len = max_seq_len
+    def __init__(self, dir_or_path: str, tokenizer: Tokenizer, n_ctx: int) -> None:
+        self.n_ctx = n_ctx
         data = self.load(dir_or_path)
-        self.data = tokenizer.encode(data).tolist()[0]
+        self.data = tokenizer.encode(data)
 
     def __len__(self) -> int:
-        return len(self.data) - self.max_seq_len
+        return len(self.data) - self.n_ctx
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         # Load only the required part into memory
-        block = self.data[idx: idx + self.max_seq_len + 1]
+        block = self.data[idx: idx + self.n_ctx + 1]
         input_ids, target_ids = block[:-1], block[1:]
         return (
             torch.tensor(input_ids, dtype=torch.long), 
@@ -89,10 +89,10 @@ class IterableDocument:
             return files, text_generator
 
 class StreamingCausalDataset(torch.utils.data.IterableDataset, IterableDocument):
-    def __init__(self, dir_or_path: str, tokenizer, max_seq_len: int, stride: int = 1) -> None:
+    def __init__(self, dir_or_path: str, tokenizer, n_ctx: int, stride: int = 1) -> None:
         self.dir_or_path = dir_or_path
         self.tokenizer = tokenizer
-        self.max_seq_len = max_seq_len
+        self.n_ctx = n_ctx
         self.stride = stride
 
     def __iter__(self):
@@ -106,11 +106,11 @@ class StreamingCausalDataset(torch.utils.data.IterableDataset, IterableDocument)
             text_generator = (open(file, "r", encoding="utf-8").read() for file in all_files)
 
         for text in text_generator:
-            token_ids = self.tokenizer.encode(text).tolist()[0]
+            token_ids = self.tokenizer.encode(text)
             n_tokens = len(token_ids)
             # Use a sliding window to generate examples
-            for i in range(0, n_tokens - self.max_seq_len, self.stride):
-                block = token_ids[i: i + self.max_seq_len + 1]
+            for i in range(0, n_tokens - self.n_ctx, self.stride):
+                block = token_ids[i: i + self.n_ctx + 1]
                 input_ids, target_ids = block[:-1], block[1:]
                 yield torch.tensor(input_ids), torch.tensor(target_ids)
 
@@ -167,28 +167,21 @@ class IterableCausalDataset(torch.utils.data.IterableDataset):
         if sentences:
             yield sentences
 
-    @staticmethod
-    def collate_fn(batch):
-        inputs, targets = zip(*batch)  # Unpack the batch into inputs and targets
-        inputs = pad_sequence(inputs, batch_first=True, padding_value=0)
-        targets = pad_sequence(targets, batch_first=True, padding_value=-100)
-        return inputs, targets
-
 
 class MaskedDataset(torch.utils.data.Dataset, Document):
-    def __init__(self, dir_or_path: str, tokenizer: Tokenizer, max_seq_len: int, mask_prob: float = 0.15) -> None:
+    def __init__(self, dir_or_path: str, tokenizer: Tokenizer, n_ctx: int, mask_prob: float = 0.15) -> None:
         self.mask_prob = mask_prob
-        self.max_seq_len = max_seq_len
+        self.n_ctx = n_ctx
         self.tokenizer = tokenizer
         data = self.load(dir_or_path)
         self.data = tokenizer.encode(data).tolist()[0]
 
     def __len__(self):
         # We subtract 2 because we will add [CLS] and [SEP] tokens.
-        return len(self.data) - (self.max_seq_len - 2)
+        return len(self.data) - (self.n_ctx - 2)
 
     def __getitem__(self, idx):
-        chunk = self.data[idx: idx + self.max_seq_len - 2]
+        chunk = self.data[idx: idx + self.n_ctx - 2]
         input_ids = [self.tokenizer.cls_token_id] + chunk + [self.tokenizer.sep_token_id]
         target_ids = [-100] * len(input_ids)
 
