@@ -89,7 +89,7 @@ tokenizer.decode(output)
 
 ## Available Model Architectures to train
 
-| Model Architecture | Source Repository |
+| Architecture | Source |
 |--------------------|--------------------------------------------|
 | GPT                | [OpenAI GPT](https://openai.com/index/language-unsupervised/) |
 | LLaMA              | [Meta LLaMA](https://arxiv.org/abs/2302.13971) |
