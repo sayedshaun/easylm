@@ -1,9 +1,8 @@
 name: Upload Python Package
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'    # only on tag pushes
+  release:
+    types: [published]   # fires when you publish (or re-publish) a GitHub Release
 
 permissions:
   contents: read
@@ -11,17 +10,15 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-        # need history/tags for setuptools-scm
         with:
           fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install build dependencies
         run: |
@@ -32,7 +29,7 @@ jobs:
         run: python -m build
 
       - name: Publish package
-        uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
+        uses: pypa/gh-action-pypi-publish@v1
         with:
           user: __token__
           password: ${{ secrets.PYPI_API_TOKEN }}
