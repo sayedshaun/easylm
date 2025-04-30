@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "langtrain"
-version = "0.0.1"
+version = "0.0.2"
 description = "Easy Language Model Training Library"
 readme = "README.md"
 authors = [
@@ -20,7 +20,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent"
 ]
-keywords = ["NLP", "language model", "training", "langtrain"]
+keywords = ["nlp", "cv", "language model", "model training", "langtrain"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
