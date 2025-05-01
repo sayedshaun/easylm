@@ -1,8 +1,9 @@
-from typing import List, NamedTuple, Tuple, Union
-import numpy as np
+import os
+import random
 import torch
-import torch.nn.functional as F
+import numpy as np
 from torch.nn.utils.rnn import pad_sequence
+from typing import List, NamedTuple, Tuple, Union
 
 
 def trainable_parameters(model: torch.nn.Module)->str:
@@ -31,3 +32,14 @@ def collate_fn(batch: List[Tuple[torch.Tensor, torch.Tensor]]) -> Tuple[torch.Te
     inputs = pad_sequence(inputs, batch_first=True, padding_value=0)
     targets = pad_sequence(targets, batch_first=True, padding_value=-100)
     return inputs, targets
+
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True 
+    torch.backends.cudnn.benchmark = False
