@@ -2,7 +2,7 @@ import random
 import torch
 from typing import List, Optional, Any, Union, Callable, Iterable, Generator
 
-class DataLoader:
+class SimpleDataloader:
     def __init__(
         self, 
         dataset: Union[torch.utils.data.Dataset, Iterable], 
