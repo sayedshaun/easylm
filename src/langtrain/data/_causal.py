@@ -4,7 +4,7 @@ import numpy as np
 from typing import Generator, Tuple, List
 from platformdirs import user_cache_dir
 from langtrain.utils._utils import seed_everything
-from langtrain.tokenizer._sentencepiece import Tokenizer
+from langtrain.tokenizer._base import Tokenizer
 from langtrain.data._base import TokenDumpper, DocumentLoader, IterableDocumentLoader
 
 

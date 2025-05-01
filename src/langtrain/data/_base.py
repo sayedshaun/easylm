@@ -2,9 +2,10 @@ import os
 import re
 import numpy as np
 from tqdm import tqdm
-from langtrain.tokenizer._sentencepiece import Tokenizer
 from multiprocessing import Pool
+from langtrain.tokenizer._base import Tokenizer
 from typing import Iterable, List, Tuple, Generator
+
 
 
 class DocumentLoader:
