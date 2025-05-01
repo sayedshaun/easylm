@@ -45,7 +45,7 @@ class IterableCausalDataset(torch.utils.data.IterableDataset, IterableDocumentLo
         self.n_ctx = n_ctx
         self.stride = stride
 
-    def __iter__(self) -> Generator[Tuple[torch.Tensor, torch.Tensor]]:
+    def __iter__(self) -> Generator[Tuple[torch.Tensor, torch.Tensor], None, None]:
         files, text_generator = self.load(self.dir_or_path)
         # If using multiple workers, split the files among them
         worker_info = torch.utils.data.get_worker_info()
