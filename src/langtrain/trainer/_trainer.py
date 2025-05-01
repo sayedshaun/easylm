@@ -9,7 +9,7 @@ from typing import Any, Union
 from dataclasses import asdict
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
-from langtrain.tokenizer._sentencepiece import Tokenizer
+from langtrain.tokenizer._base import Tokenizer
 from langtrain.config._config import TrainingConfig
 
 
