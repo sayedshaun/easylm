@@ -1,7 +1,13 @@
-from ._dataset import (
-    CausalDataset,
-    StreamingCausalDataset,
+from ._causal import (
+    SimpleCausalDataset,
     IterableCausalDataset,
+    ExperimentalIterableCausalDataset,
+    LazyCausalDataset
+)
+from ._masked import (
+    MaskedDataset
+)
+from ._vision import (
     ImageClassificationDataset
 )
-from ._dataloader import DataLoader
+from ._dataloader import SimpleDataloader
