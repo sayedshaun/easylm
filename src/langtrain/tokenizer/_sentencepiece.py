@@ -1,45 +1,17 @@
 import os
 import shutil
-from typing import List, Optional, Union
 import warnings
-import numpy as np
-from platformdirs import user_cache_dir
-import sentencepiece as spm
-from sentencepiece import SentencePieceProcessor
 import torch
-from abc import ABC
+import numpy as np
+import sentencepiece as spm
+from typing import List, Optional, Union
+from platformdirs import user_cache_dir
+from sentencepiece import SentencePieceProcessor
+from langtrain.tokenizer._base import TextLoader
 
 
-class TextLoader:
-    def load(self, dir_or_path: str) -> str:
-        if os.path.isdir(dir_or_path):
-            return self.load_data_from_dir(dir_or_path)
-        else:
-            return self.load_data(dir_or_path)
 
-    @staticmethod
-    def load_data_from_dir(dir_path: str) -> str:
-        if not os.path.isdir(dir_path):
-            raise FileNotFoundError(f"Directory not found: {dir_path}")
-        txt_files = [
-            os.path.join(dir_path, file)
-            for file in os.listdir(dir_path)
-            if file.endswith(".txt")
-        ]
-        if not txt_files:
-            raise ValueError(f"No .txt files found in directory: {dir_path}")
-        return ",".join(txt_files)
-
-    @staticmethod
-    def load_data(file_path: str) -> str:
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-        return file_path
-
-
-class Tokenizer(TextLoader):
+class SentencePieceTokenizer(TextLoader):
     mask_token: str = "<|mask|>"
     cls_token: str = "<|cls|>" 
     sep_token: str = "<|sep|>"
@@ -71,13 +43,13 @@ class Tokenizer(TextLoader):
 
         # Set default special tokens.
         self.special_tokens = [
-            Tokenizer.mask_token,
-            Tokenizer.cls_token,
-            Tokenizer.sep_token,
-            Tokenizer.pad_token,
-            Tokenizer.unk_token,
-            Tokenizer.sos_token,
-            Tokenizer.eos_token
+            SentencePieceTokenizer.mask_token,
+            SentencePieceTokenizer.cls_token,
+            SentencePieceTokenizer.sep_token,
+            SentencePieceTokenizer.pad_token,
+            SentencePieceTokenizer.unk_token,
+            SentencePieceTokenizer.sos_token,
+            SentencePieceTokenizer.eos_token
         ]
         if add_special_tokens:
             warnings.warn("You must retrain the model after adding special tokens.")
@@ -93,13 +65,13 @@ class Tokenizer(TextLoader):
 
         # Load the SentencePiece model.
         self.processor = SentencePieceProcessor(model_file=self._model_path)
-        self.mask_token_id = self.encode(Tokenizer.mask_token)
-        self.cls_token_id = self.encode(Tokenizer.cls_token)
-        self.sep_token_id = self.encode(Tokenizer.sep_token)
-        self.pad_token_id = self.encode(Tokenizer.pad_token)
-        self.unk_token_id = self.encode(Tokenizer.unk_token)
-        self.sos_token_id = self.encode(Tokenizer.sos_token)
-        self.eos_token_id = self.encode(Tokenizer.cls_token) 
+        self.mask_token_id = self.encode(SentencePieceTokenizer.mask_token)
+        self.cls_token_id = self.encode(SentencePieceTokenizer.cls_token)
+        self.sep_token_id = self.encode(SentencePieceTokenizer.sep_token)
+        self.pad_token_id = self.encode(SentencePieceTokenizer.pad_token)
+        self.unk_token_id = self.encode(SentencePieceTokenizer.unk_token)
+        self.sos_token_id = self.encode(SentencePieceTokenizer.sos_token)
+        self.eos_token_id = self.encode(SentencePieceTokenizer.cls_token) 
 
     def _train_model(self) -> None:
         spm.SentencePieceTrainer.Train(
@@ -133,48 +105,38 @@ class Tokenizer(TextLoader):
         shutil.copy(self._vocab_path, path)
 
     @classmethod
-    def from_pretrained(cls, pretrained_path: str) -> "Tokenizer":
+    def from_pretrained(cls, pretrained_path: str) -> "SentencePieceTokenizer":
         model_path = os.path.join(pretrained_path, "VOCAB.model")
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Pretrained model not found at: {model_path}")
         
         # Create an uninitialized instance of Tokenizer.
-        tokenizer = Tokenizer.__new__(Tokenizer)
+        tokenizer = SentencePieceTokenizer.__new__(SentencePieceTokenizer)
         
         # Set the necessary attributes.
         tokenizer._tokenizer_dir = pretrained_path
         tokenizer._model_path = model_path
         tokenizer.vocab_size = None  # or set an appropriate default if needed
         tokenizer.special_tokens = [
-            Tokenizer.mask_token,
-            Tokenizer.cls_token,
-            Tokenizer.sep_token,
-            Tokenizer.pad_token,
-            Tokenizer.unk_token,
-            Tokenizer.sos_token,
-            Tokenizer.eos_token
+            SentencePieceTokenizer.mask_token,
+            SentencePieceTokenizer.cls_token,
+            SentencePieceTokenizer.sep_token,
+            SentencePieceTokenizer.pad_token,
+            SentencePieceTokenizer.unk_token,
+            SentencePieceTokenizer.sos_token,
+            SentencePieceTokenizer.eos_token
         ]
         
         # Load the pretrained SentencePiece model.
         tokenizer.processor = SentencePieceProcessor(model_file=model_path)
         
         # Setup token ids.
-        tokenizer.mask_token_id = tokenizer.encode(Tokenizer.mask_token)
-        tokenizer.cls_token_id = tokenizer.encode(Tokenizer.cls_token)
-        tokenizer.sep_token_id = tokenizer.encode(Tokenizer.sep_token)
-        tokenizer.pad_token_id = tokenizer.encode(Tokenizer.pad_token)
-        tokenizer.unk_token_id = tokenizer.encode(Tokenizer.unk_token)
-        tokenizer.sos_token_id = tokenizer.encode(Tokenizer.sos_token)
-        tokenizer.eos_token_id = tokenizer.encode(Tokenizer.eos_token)
+        tokenizer.mask_token_id = tokenizer.encode(SentencePieceTokenizer.mask_token)
+        tokenizer.cls_token_id = tokenizer.encode(SentencePieceTokenizer.cls_token)
+        tokenizer.sep_token_id = tokenizer.encode(SentencePieceTokenizer.sep_token)
+        tokenizer.pad_token_id = tokenizer.encode(SentencePieceTokenizer.pad_token)
+        tokenizer.unk_token_id = tokenizer.encode(SentencePieceTokenizer.unk_token)
+        tokenizer.sos_token_id = tokenizer.encode(SentencePieceTokenizer.sos_token)
+        tokenizer.eos_token_id = tokenizer.encode(SentencePieceTokenizer.eos_token)
         
         return tokenizer
-
-
-
-__all__ = ["Tokenizer"]
-
-
-if __name__ == "__main__":
-    tokenizer = Tokenizer(dir_or_path="/home/shaun/Desktop/data", vocab_size=1000, retrain=True)
-    print(tokenizer.encode("Hello, world!"))
-    tokenizer.save("pretrained_model")
