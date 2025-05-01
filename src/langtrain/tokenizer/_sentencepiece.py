@@ -7,18 +7,38 @@ import sentencepiece as spm
 from typing import List, Optional, Union
 from platformdirs import user_cache_dir
 from sentencepiece import SentencePieceProcessor
-from langtrain.tokenizer._base import TextLoader
+from langtrain.tokenizer._base import TextLoader, Tokenizer
 
 
 
-class SentencePieceTokenizer(TextLoader):
-    mask_token: str = "<|mask|>"
-    cls_token: str = "<|cls|>" 
-    sep_token: str = "<|sep|>"
-    pad_token: str = "<|pad|>"
-    unk_token: str = "<|unk|>"
-    sos_token: str = "<|startoftext|>"
-    eos_token: str = "<|endoftext|>"
+class SentencePieceTokenizer(TextLoader, Tokenizer):
+    """
+    A tokenizer that uses SentencePiece in backend for tokenization. 
+
+    Args:
+        dir_or_path (str): Directory or path to the .txt training data.
+        vocab_size (int): Size of the vocabulary.
+        retrain (bool): Whether to retrain the model.
+        model_type (str): Type of SentencePiece model. Default is "bpe".
+        add_special_tokens (List[str]): List of special tokens to add.
+
+    Example:
+    ```python
+    from langtrain.tokenizer import SentencePieceTokenizer
+    tokenizer = SentencePieceTokenizer(
+        dir_or_path="data_directory"
+        vocab_size=32000,
+        retrain=True,
+        model_type="bpe",
+    )
+
+    # From pretrained
+    tokenizer = SentencePieceTokenizer.from_pretrained("path_to_pretrained_model")
+    text = "Hello, world!"
+    encoded = tokenizer.encode(text)
+    decoded = tokenizer.decode(encoded)
+    ```
+    """
 
     def __init__(
         self,
@@ -27,7 +47,7 @@ class SentencePieceTokenizer(TextLoader):
         retrain: bool = False,
         model_type: str = "bpe",
         add_special_tokens: Optional[List[str]] = None) -> None:
-        super().__init__()
+        super(SentencePieceTokenizer, self).__init__()
         self.model_type = model_type
         self.retrain = retrain
         self.add_special_tokens = add_special_tokens if add_special_tokens else []
@@ -80,8 +100,7 @@ class SentencePieceTokenizer(TextLoader):
             vocab_size=self.vocab_size,
             user_defined_symbols=self.special_tokens,
             add_dummy_prefix=False,
-            model_type="bpe",
-
+            model_type=self.model_type,
         )
 
     def encode(self, text: str) -> torch.Tensor:
