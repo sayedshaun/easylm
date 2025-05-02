@@ -1,14 +1,12 @@
-echo "Installing the package in editable mode..."
-pip install -e .
+echo "Installing the package..."
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install git+https://github.com/sayedshaun/langtrain.git
 
 echo "Running tests with pytest..."
 pytest tests/
 
 echo "Removing the package..."
-rm -rf dist/*.tar.gz
-rm -rf dist/*.whl
-rm -rf build/
-rm -rf dist/
-rm -rf *.egg-info
+pip uninstall -y langtrain
+rm -rf tests/__pycache__
 rm -rf tests/pretrained_model
 rm -rf .pytest_cache
