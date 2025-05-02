@@ -1,0 +1,42 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install git+https://github.com/sayedshaun/langtrain.git
+
+      # Run tests
+      - name: Run tests
+        run: pytest tests/
+
+      # Clean up (optional)
+      - name: Clean up
+        run: |
+          pip uninstall -y langtrain
+          rm -rf tests/__pycache__
+          rm -rf tests/pretrained_model
+          rm -rf .pytest_cache
