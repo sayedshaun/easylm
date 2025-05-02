@@ -24,7 +24,6 @@ __pycache__
 *.ipynb_checkpoints
 *.ipynb
 wandb
-tests
 dist
 *.egg-info
 build
@@ -35,3 +34,4 @@ build
 *.whl
 *.tar
 corpus
+.pytest_cache
