@@ -19,7 +19,6 @@ __pycache__
 *.zip
 *.tar.gz
 *.tar
-*.txt
 *.model
 *.ipynb_checkpoints
 *.ipynb
