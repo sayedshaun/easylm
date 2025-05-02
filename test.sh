@@ -10,3 +10,4 @@ pip uninstall -y langtrain
 rm -rf tests/__pycache__
 rm -rf tests/pretrained_model
 rm -rf .pytest_cache
+rm -rf tests/test_weights
