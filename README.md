@@ -28,8 +28,8 @@ pip install git+https://github.com/sayedshaun/langtrain.git
 import langtrain as lt
 
 data_path = "data_directory"
-tokenizer = lt.tokenizer.Tokenizer(data_path, vocab_size=5000)
-dataset = lt.dataset.CausalDataset(data_path, tokenizer, n_ctx=512)
+tokenizer = lt.tokenizer.SentencePieceTokenizer(data_path, vocab_size=5000)
+dataset = lt.dataset.SimpleCausalDataset(data_path, tokenizer, n_ctx=512)
 model = lt.model.LlamaModel(
     lt.model.LlamaConfig(
         vocab_size=tokenizer.vocab_size,
