@@ -75,7 +75,6 @@ class Trainer:
             raise ValueError("Your device does not support bf16")
         #==================================================================================================
         
-
         # Initialize optimizer if needed
         if self.optimizer is None:
             self.optimizer = torch.optim.AdamW(
@@ -92,8 +91,7 @@ class Trainer:
                 eps=self.lr_epsilon
                 )
 
-        
-        self.logs = {"epoch": 0, "global_step": 0, "train_loss": [],"val_loss": [],"best_loss": float("inf")}
+        self.logs = {"epoch": 0, "global_step": 0, "train_loss": [float("inf")],"val_loss": [float("inf")],"best_loss": float("inf")}
         self.model.to(self.device)
 
         if self.report_to_wandb:
@@ -101,7 +99,6 @@ class Trainer:
             wandb.watch(self.model, log="all", log_graph=False, log_freq=self.logging_steps)
 
         self.save_config()
-
 
         #==================================================================================================
         if self.distributed_backend == "ddp":
@@ -147,7 +144,6 @@ class Trainer:
         self.model = torch.nn.DataParallel(self.model, device_ids=list(range(device_count)))
         return self.model
 
-        
 
     def train(self) -> None:
         self.model.train()
