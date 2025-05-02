@@ -33,3 +33,5 @@ build
 *.tar
 corpus
 .pytest_cache
+trainer_config.yaml
+model_config.yaml
