@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from typing import Tuple, Union
 import torch.nn.functional as F
-from langtrain.config._config import VITConfig
+from langtrain.config.config import VITConfig
 
 class Linear(nn.Module):
     def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:

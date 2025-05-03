@@ -2,7 +2,7 @@ from typing import Union
 import torch
 import torch.nn.functional as F
 import yaml
-from langtrain.config._config import GPTConfig
+from langtrain.config.config import GPTConfig
 from langtrain.nn.nn import TransformerDecoderBlock, PositionalEmbeddings
 from torch.nn import LayerNorm, Linear
 from langtrain.model.modeling_utils import CausalModelOutput

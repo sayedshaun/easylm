@@ -10,7 +10,7 @@ from dataclasses import asdict
 from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 from langtrain.tokenizer.base import Tokenizer
-from langtrain.config._config import TrainingConfig
+from langtrain.config.config import TrainingConfig
 from langtrain.utils import seed_everything
 from langtrain.trainer.trainer_utils import callback_fn
 
