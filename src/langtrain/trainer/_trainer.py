@@ -136,7 +136,7 @@ class Trainer:
         self.world_size = int(os.environ["WORLD_SIZE"])
         self.local_rank = int(os.environ["LOCAL_RANK"])
         torch.cuda.set_device(self.local_rank)
-        self.device = torch.device(self.device, self.local_rank)
+        self.device = torch.device(self.device.type, self.local_rank)
         torch.distributed.init_process_group(
             backend="nccl",
             init_method="env://"
