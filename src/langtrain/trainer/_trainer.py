@@ -187,7 +187,7 @@ class Trainer:
                                 # step=global_step, 
                                 train_loss=f"{avg_loss:.4f}", 
                                 best_train_loss=f"{self.logs['best_loss']:.4f}",
-                                val_loss=f"{self.logs['val_loss']:.4f}" if self.val_data != None else 'N/A',
+                                val_loss=f"{self.logs['val_loss']:.4f}" if self.val_data != None and self.logs['val_loss'] else 'N/A',
                             )
                             if self.config.report_to_wandb:
                                 wandb.log(
