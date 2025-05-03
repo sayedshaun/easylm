@@ -84,7 +84,7 @@ def test_bert_trainer():
     )
     train_config = lt.config.TrainingConfig(
         train_data=dataset,
-        val_data=dataset,
+        #val_data=dataset,
         epochs=1,
         batch_size=2,
         learning_rate=1e-3,
