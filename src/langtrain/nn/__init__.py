@@ -1,4 +1,4 @@
-from ._nn import (
+from .nn import (
     SiLU,
     ReLU,
     Softmax,

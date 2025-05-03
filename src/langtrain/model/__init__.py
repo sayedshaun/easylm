@@ -1,8 +1,8 @@
 # src/model/__init__.py
-from ._gpt import GPTModel
-from ._llama import LlamaModel
-from ._bert import BertModel
-from ._vit import VITImageClassifier
+from .gpt import GPTModel
+from .llama import LlamaModel
+from .bert import BertModel
+from .vit import VITImageClassifier
 
 
 __all__ = [
