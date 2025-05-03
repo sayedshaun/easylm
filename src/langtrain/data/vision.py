@@ -3,7 +3,7 @@ import torch
 from PIL import Image
 from torchvision import transforms
 from typing import List, Optional, Tuple, Union
-from langtrain.utils.utils import seed_everything
+from langtrain.utils import seed_everything
 
 
 seed_everything(42)

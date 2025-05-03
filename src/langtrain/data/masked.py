@@ -2,7 +2,7 @@ import random
 import torch
 from typing import Tuple
 from langtrain.data.base import DocumentLoader
-from langtrain.utils.utils import seed_everything
+from langtrain.utils import seed_everything
 from langtrain.tokenizer.sentencepiece import Tokenizer
 
 

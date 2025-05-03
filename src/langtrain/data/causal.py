@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from typing import Generator, Tuple, List
 from platformdirs import user_cache_dir
-from langtrain.utils.utils import seed_everything
+from langtrain.utils import seed_everything
 from langtrain.tokenizer.base import Tokenizer
 from langtrain.data.base import TokenDumpper, DocumentLoader, IterableDocumentLoader
 
