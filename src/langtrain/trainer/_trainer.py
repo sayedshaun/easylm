@@ -46,37 +46,17 @@ class Trainer:
         self.collate_fn = collate_fn
 
         self.device = config.device if isinstance(config.device, torch.device) else torch.device(str(config.device))
-        self.epochs = config.epochs
-        self.overwrite_output_dir = config.overwrite_output_dir
-        self.gradient_accumulation_steps = config.gradient_accumulation_steps
-        self.gradient_clipping = config.gradient_clipping
-        self.validation_steps = config.validation_steps
-        self.learning_rate = config.learning_rate
-        self.weight_decay = config.weight_decay
-        self.lr_epsilon = config.lr_epsilon
-        self.batch_size = config.batch_size
-        self.logging_steps = config.logging_steps
-        self.validation_steps = config.validation_steps
-        self.save_steps = config.save_steps
-        self.num_workers = config.num_workers
-        self.seed = config.seed
-        self.num_checkpoints = config.num_checkpoints
-        self.shuffle_train_data = config.shuffle_data
-        self.pin_memory = config.pin_memory
         self.scaler = GradScaler(device=self.device)
         self.enable_amp = True if self.device.type == "cuda" else False
-        self.report_to_wandb = config.report_to_wandb
-        self.wandb_project = config.wandb_project
-        self.distributed_backend = config.distributed_backend
 
         if self.config.overwrite_output_dir and os.path.exists(self.model_name):
             shutil.rmtree(self.model_name)
         os.makedirs(self.model_name, exist_ok=True) 
 
-        if self.seed is not None:
-            seed_everything(self.seed)
+        if self.config.seed is not None:
+            seed_everything(self.config.seed)
             
-        assert self.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
+        assert self.config.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
 
         if config.precision == "fp16":
             self.precision = torch.float16
@@ -94,35 +74,35 @@ class Trainer:
         if self.optimizer is None:
             self.optimizer = torch.optim.AdamW(
                 params=self.model.parameters(), 
-                weight_decay=self.weight_decay,
-                lr=self.learning_rate,
-                eps=self.lr_epsilon
+                weight_decay=self.config.weight_decay,
+                lr=self.config.learning_rate,
+                eps=self.config.lr_epsilon
                 )
         else:
             self.optimizer = self.optimizer(
                 params=self.model.parameters(), 
-                lr=self.learning_rate,
-                weight_decay=self.weight_decay,
-                eps=self.lr_epsilon
+                lr=self.config.learning_rate,
+                weight_decay=self.config.weight_decay,
+                eps=self.config.lr_epsilon
                 )
 
         self.logs = {"epoch": 0, "global_step": 0, "train_loss": None,"val_loss": None,"best_loss": float("inf")}
         self.model.to(self.device)
 
-        if self.report_to_wandb:
-            wandb.init(project=self.wandb_project, name=self.model_name)
-            wandb.watch(self.model, log="all", log_graph=False, log_freq=self.logging_steps)
+        if self.config.report_to_wandb:
+            wandb.init(project=self.config.wandb_project, name=self.model_name)
+            wandb.watch(self.model, log="all", log_graph=False, log_freq=self.config.logging_steps)
 
         self.save_config()
 
-        if self.distributed_backend == "ddp":
+        if self.config.distributed_backend == "ddp":
             self.model = self._trigger_ddp()
-        elif self.distributed_backend == "dp":
+        elif self.config.distributed_backend == "dp":
             self.model = self._trigger_dp()
-        elif self.distributed_backend is None:
+        elif self.config.distributed_backend is None:
             pass
         else:
-            raise ValueError(f"Invalid distributed backend: {self.distributed_backend}, must be one of ['ddp', 'dp', None]")
+            raise ValueError(f"Invalid distributed backend: {self.config.distributed_backend}, must be one of ['ddp', 'dp', None]")
 
         self.train_data = self._created_dataloader(config.train_data)
         self.val_data = self._created_dataloader(config.val_data)
@@ -160,7 +140,7 @@ class Trainer:
 
 
     def train(self) -> None:
-        if self.distributed_backend == "ddp":
+        if self.config.distributed_backend == "ddp":
             torch.distributed.barrier()
 
         self.model.train()
@@ -168,9 +148,9 @@ class Trainer:
         accumulated_loss = 0.0  # Track accumulated loss
         start_epoch = self.logs["epoch"] if self.logs["epoch"] > 0 else 0
 
-        with tqdm(total=self.epochs, desc=f"Training | Step {global_step}") as pbar:
+        with tqdm(total=self.config.epochs, desc=f"Training | Step {global_step}") as pbar:
             pbar.update(self.logs["epoch"]) if self.logs["epoch"] > 0 else None
-            for epoch in range(start_epoch, self.epochs):
+            for epoch in range(start_epoch, self.config.epochs):
                 self.logs["epoch"] = epoch
                 for batch in self.train_data:
                     pbar.set_description(f"Training | Step {global_step}")
@@ -180,26 +160,26 @@ class Trainer:
                         enabled=self.enable_amp
                         ):
                         loss = self.step(self.model, batch, self.device)
-                        loss = loss / self.gradient_accumulation_steps
+                        loss = loss / self.config.gradient_accumulation_steps
                     
                     accumulated_loss += loss.item()
                     self.scaler.scale(loss).backward()
 
-                    if global_step % self.validation_steps == 0 and self.val_data is not None and global_step != 0:
+                    if global_step % self.config.validation_steps == 0 and self.val_data is not None and global_step != 0:
                         pbar.set_description(f"Validating")
                         self.evaluate()
                         self.model.train()
                         pbar.set_description(f"Training | Step {global_step}")
 
-                    if global_step % self.gradient_accumulation_steps == 0 and global_step != 0:
-                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
+                    if global_step % self.config.gradient_accumulation_steps == 0 and global_step != 0:
+                        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.gradient_clipping)
                         self.scaler.step(self.optimizer)
                         self.scaler.update()
                         self.optimizer.zero_grad()
-                        avg_loss = accumulated_loss / self.gradient_accumulation_steps
+                        avg_loss = accumulated_loss / self.config.gradient_accumulation_steps
                         accumulated_loss = 0.0  # Reset accumulated loss
 
-                        if self.logging_steps and global_step % self.logging_steps == 0 and global_step != 0:
+                        if self.config.logging_steps and global_step % self.config.logging_steps == 0 and global_step != 0:
                             self.logs["train_loss"] = avg_loss
                             self.logs["global_step"] = global_step
                             self.logs["epoch"] = epoch
@@ -209,7 +189,7 @@ class Trainer:
                                 best_train_loss=f"{self.logs['best_loss']:.4f}",
                                 val_loss=f"{self.logs['val_loss']:.4f}" if self.val_data != None else 'N/A',
                             )
-                            if self.report_to_wandb:
+                            if self.config.report_to_wandb:
                                 wandb.log(
                                     data={
                                         "train/train_loss": avg_loss,
@@ -220,15 +200,15 @@ class Trainer:
                                         },
                                     )
 
-                    if self.save_steps and global_step % self.save_steps == 0 and global_step != 0:
+                    if self.config.save_steps and global_step % self.config.save_steps == 0 and global_step != 0:
                         self.save()
 
                     global_step += 1
                 pbar.update(1)
 
-        if self.report_to_wandb:
+        if self.config.report_to_wandb:
             wandb.finish()
-        if self.distributed_backend == "ddp":
+        if self.config.distributed_backend == "ddp":
             torch.distributed.destroy_process_group()
 
     
@@ -237,7 +217,7 @@ class Trainer:
             model_file = os.path.join(checkpoint_path, "pytorch_model.pt")
             state_dict = torch.load(model_file)
             # Handle DDP/DP prefix if necessary
-            if self.distributed_backend == "ddp" or self.distributed_backend == "dp":
+            if self.config.distributed_backend == "ddp" or self.config.distributed_backend == "dp":
                 state_dict = {f"module.{k}": v for k, v in state_dict.items()}
 
             self.model.load_state_dict(state_dict)  # Load the model state dict
@@ -287,9 +267,9 @@ class Trainer:
             return dataset
 
         sampler = None
-        shuffle = self.shuffle_train_data
+        shuffle = self.config.shuffle_data
 
-        if self.distributed_backend == "ddp":
+        if self.config.distributed_backend == "ddp":
             if not torch.distributed.is_initialized():
                 raise RuntimeError("Distributed training is not initialized.")
             
@@ -304,9 +284,9 @@ class Trainer:
 
         return torch.utils.data.DataLoader(
             dataset=dataset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            pin_memory=self.pin_memory,
+            batch_size=self.config.batch_size,
+            num_workers=self.config.num_workers,
+            pin_memory=self.config.pin_memory,
             shuffle=shuffle,
             sampler=sampler,
             collate_fn=self.collate_fn,
@@ -315,7 +295,7 @@ class Trainer:
         
 
     def save(self) -> None:
-        if self.distributed_backend == "ddp" or self.distributed_backend == "dp":
+        if self.config.distributed_backend == "ddp" or self.config.distributed_backend == "dp":
             model_state_dict = self.model.module.state_dict()
         else:
             model_state_dict = self.model.state_dict()
@@ -340,7 +320,7 @@ class Trainer:
             reverse=True
             )
             for i, checkpoint in enumerate(checkpoints):
-                if i >= self.num_checkpoints:
+                if i >= self.config.num_checkpoints:
                     shutil.rmtree(os.path.join(self.model_name, checkpoint))
 
 
@@ -367,7 +347,7 @@ class Trainer:
 
         with open(f"{self.model_name}/model_config.yaml", "w") as f:
             yaml.dump(model_config_dict, f)
-        if self.report_to_wandb:
+        if self.config.report_to_wandb:
             trainer_config_dict["model"] = model_config_dict
             model_config_dict["architecture"] = str(self.model.__class__.__name__)
             wandb.config.update(trainer_config_dict)
