@@ -11,6 +11,7 @@ from torch.amp import autocast, GradScaler
 from torch.utils.data import DataLoader
 from langtrain.tokenizer._base import Tokenizer
 from langtrain.config._config import TrainingConfig
+from langtrain.utils._utils import seed_everything
 
 
 class Trainer:
@@ -44,6 +45,7 @@ class Trainer:
         self.model_name = model_name
         self.collate_fn = collate_fn
 
+        self.device = config.device if isinstance(config.device, torch.device) else torch.device(str(config.device))
         self.epochs = config.epochs
         self.overwrite_output_dir = config.overwrite_output_dir
         self.gradient_accumulation_steps = config.gradient_accumulation_steps
@@ -62,14 +64,18 @@ class Trainer:
         self.shuffle_train_data = config.shuffle_data
         self.pin_memory = config.pin_memory
         self.scaler = GradScaler(device=self.device)
-        self.enable_amp = True if self.device == "cuda" else False
+        self.enable_amp = True if self.device.type == "cuda" else False
         self.report_to_wandb = config.report_to_wandb
         self.wandb_project = config.wandb_project
         self.distributed_backend = config.distributed_backend
-        self.device = config.device if isinstance(config.device, torch.device) else torch.device(str(config.device))
 
-        torch.manual_seed(self.seed) if self.seed is not None else None
-        torch.cuda.manual_seed(self.seed) if self.seed is not None else None
+        if self.config.overwrite_output_dir and os.path.exists(self.model_name):
+            shutil.rmtree(self.model_name)
+        os.makedirs(self.model_name, exist_ok=True) 
+
+        if self.seed is not None:
+            seed_everything(self.seed)
+            
         assert self.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
 
         if config.precision == "fp16":
@@ -154,9 +160,6 @@ class Trainer:
 
 
     def train(self) -> None:
-        if self.overwrite_output_dir and os.path.exists(self.model_name):
-            shutil.rmtree(self.model_name)
-        os.makedirs(self.model_name, exist_ok=True)
         if self.distributed_backend == "ddp":
             torch.distributed.barrier()
 
