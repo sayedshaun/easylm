@@ -5,7 +5,7 @@ from typing import Union
 import torch.nn.functional as F
 import yaml
 from langtrain.config import BertConfig
-from langtrain.nn._nn import (
+from langtrain.nn.nn import (
     PositionalEmbeddings, 
     TransformerEncoderBlock, 
     LayerNorm, 
