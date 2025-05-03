@@ -53,6 +53,7 @@ class VITConfig:
 class TrainingConfig:
     model: Union[torch.nn.Module, None] = None
     epochs: Union[int, None] =  None
+    overwrite_output_dir: bool = False
     batch_size: Union[int, None] = None
     learning_rate: float = None
     weight_decay: float = 0
