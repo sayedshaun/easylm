@@ -3,7 +3,7 @@ from torch import nn
 from typing import Union
 import torch.nn.functional as F
 from langtrain.config._config import VITConfig
-from langtrain.nn._nn import PatchEmbedding, TransformerEncoderBlock
+from langtrain.nn.nn import PatchEmbedding, TransformerEncoderBlock
 
 
 
