@@ -14,6 +14,20 @@ from langtrain.config._config import TrainingConfig
 
 
 class Trainer:
+    """
+    Trainer Class
+    The `Trainer` class is designed to facilitate the training, evaluation, and management of deep learning models. 
+    It provides support for distributed training, mixed precision, gradient accumulation, and integration with 
+    logging tools like Weights & Biases (wandb). The class is highly configurable and supports various training 
+    scenarios, including single-device, multi-device, and distributed setups.
+    Attributes:
+        model (torch.nn.Module): The model to be trained.
+        config (TrainingConfig): Configuration object containing training parameters.
+        tokenizer (Tokenizer): Tokenizer used for preprocessing text data.
+        collate_fn (callable, optional): Custom collate function for DataLoader.
+        model_name (str): Name of the model, used for saving and loading.        
+    """
+
     def __init__(
         self, 
         model: torch.nn.Module, 
@@ -21,21 +35,17 @@ class Trainer:
         tokenizer: Tokenizer,
         optimizer: Union[torch.optim.Optimizer, None] = None, 
         model_name: str = "my_pretrained_model",
-        collate_fn: Union[None, callable] = None,
-        ) -> None:
+        collate_fn: Union[None, callable] = None) -> None:
+
         self.config = config
         self.model = model
-        self.device = config.device
         self.optimizer = optimizer
         self.tokenizer = tokenizer
         self.model_name = model_name
         self.collate_fn = collate_fn
-        # if os.path.exists(self.model_name):
-        #     shutil.rmtree(self.model_name)
-        os.makedirs(self.model_name, exist_ok=True)
-        #===============================================
 
         self.epochs = config.epochs
+        self.overwrite_output_dir = config.overwrite_output_dir
         self.gradient_accumulation_steps = config.gradient_accumulation_steps
         self.gradient_clipping = config.gradient_clipping
         self.validation_steps = config.validation_steps
@@ -56,12 +66,12 @@ class Trainer:
         self.report_to_wandb = config.report_to_wandb
         self.wandb_project = config.wandb_project
         self.distributed_backend = config.distributed_backend
+        self.device = config.device if isinstance(config.device, torch.device) else torch.device(str(config.device))
 
         torch.manual_seed(self.seed) if self.seed is not None else None
         torch.cuda.manual_seed(self.seed) if self.seed is not None else None
         assert self.gradient_accumulation_steps > 0, "Gradient accumulation steps must be greater than 0"
 
-        #=======================================Precision==================================================
         if config.precision == "fp16":
             self.precision = torch.float16
         elif config.precision == "bf16":
@@ -73,7 +83,6 @@ class Trainer:
         
         if self.precision == torch.bfloat16 and torch.cuda.is_bf16_supported() is False:
             raise ValueError("Your device does not support bf16")
-        #==================================================================================================
         
         # Initialize optimizer if needed
         if self.optimizer is None:
@@ -100,7 +109,6 @@ class Trainer:
 
         self.save_config()
 
-        #==================================================================================================
         if self.distributed_backend == "ddp":
             self.model = self._trigger_ddp()
         elif self.distributed_backend == "dp":
@@ -146,11 +154,16 @@ class Trainer:
 
 
     def train(self) -> None:
+        if self.overwrite_output_dir and os.path.exists(self.model_name):
+            shutil.rmtree(self.model_name)
+        os.makedirs(self.model_name, exist_ok=True)
+        if self.distributed_backend == "ddp":
+            torch.distributed.barrier()
+
         self.model.train()
         global_step = 1 if self.logs["global_step"] == 0 else self.logs["global_step"]
         accumulated_loss = 0.0  # Track accumulated loss
         start_epoch = self.logs["epoch"]
-        device_type = self.device.type if isinstance(self.device, torch.device) else self.device
 
         with tqdm(total=self.epochs, desc=f"Training | Step {global_step}") as pbar:
             pbar.update(self.logs["epoch"]) if self.logs["epoch"] > 0 else None
@@ -159,7 +172,7 @@ class Trainer:
                 for batch in self.train_data:
                     pbar.set_description(f"Training | Step {global_step}")
                     with autocast(
-                        device_type=device_type, 
+                        device_type=self.device.type, 
                         dtype=self.precision, 
                         enabled=self.enable_amp
                         ):
@@ -258,7 +271,7 @@ class Trainer:
         for batch in self.val_data:
             with torch.no_grad():
                 with autocast(
-                    device_type=self.device, 
+                    device_type=self.device.type, 
                     dtype=self.precision, 
                     enabled=self.enable_amp
                     ):
