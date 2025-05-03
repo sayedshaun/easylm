@@ -1,16 +1,16 @@
-from ._causal import (
+from .causal import (
     SimpleCausalDataset,
     IterableCausalDataset,
     ExperimentalIterableCausalDataset,
     LazyCausalDataset
 )
-from ._masked import (
+from .masked import (
     MaskedDataset
 )
-from ._vision import (
+from .vision import (
     ImageClassificationDataset
 )
-from ._dataloader import SimpleDataloader
+from .dataloader import SimpleDataloader
 
 
 __all__ = [
