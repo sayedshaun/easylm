@@ -106,7 +106,7 @@ class Trainer:
                 eps=self.lr_epsilon
                 )
 
-        self.logs = {"epoch": 0, "global_step": 0, "train_loss": [float("inf")],"val_loss": [float("inf")],"best_loss": float("inf")}
+        self.logs = {"epoch": 0, "global_step": 0, "train_loss": None,"val_loss": None,"best_loss": float("inf")}
         self.model.to(self.device)
 
         if self.report_to_wandb:
@@ -164,13 +164,13 @@ class Trainer:
             torch.distributed.barrier()
 
         self.model.train()
-        global_step = 1 if self.logs["global_step"] == 0 else self.logs["global_step"]
+        global_step = 0 if self.logs["global_step"] == 0 else self.logs["global_step"]
         accumulated_loss = 0.0  # Track accumulated loss
-        start_epoch = self.logs["epoch"]
+        start_epoch = self.logs["epoch"] if self.logs["epoch"] > 0 else 0
 
         with tqdm(total=self.epochs, desc=f"Training | Step {global_step}") as pbar:
             pbar.update(self.logs["epoch"]) if self.logs["epoch"] > 0 else None
-            for epoch in range(start_epoch, self.epochs + 1):
+            for epoch in range(start_epoch, self.epochs):
                 self.logs["epoch"] = epoch
                 for batch in self.train_data:
                     pbar.set_description(f"Training | Step {global_step}")
@@ -185,53 +185,45 @@ class Trainer:
                     accumulated_loss += loss.item()
                     self.scaler.scale(loss).backward()
 
-                    # Perform optimization step only when accumulated steps reach the limit
-                    if (global_step % self.gradient_accumulation_steps == 0) or (global_step == 1):
+                    if global_step % self.validation_steps == 0 and self.val_data is not None and global_step != 0:
+                        pbar.set_description(f"Validating")
+                        self.evaluate()
+                        self.model.train()
+                        pbar.set_description(f"Training | Step {global_step}")
+
+                    if global_step % self.gradient_accumulation_steps == 0 and global_step != 0:
                         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clipping)
                         self.scaler.step(self.optimizer)
                         self.scaler.update()
                         self.optimizer.zero_grad()
-
-                        # Log loss and update tqdm bar
                         avg_loss = accumulated_loss / self.gradient_accumulation_steps
-                        accumulated_loss = 0.0  # Reset loss accumulator
-                        
-                        if self.logging_steps is not None and global_step % self.logging_steps == 0:
-                            self.logs["train_loss"].append(avg_loss)
+                        accumulated_loss = 0.0  # Reset accumulated loss
+
+                        if self.logging_steps and global_step % self.logging_steps == 0 and global_step != 0:
+                            self.logs["train_loss"] = avg_loss
                             self.logs["global_step"] = global_step
                             self.logs["epoch"] = epoch
                             pbar.set_postfix(
-                                step=global_step, 
+                                # step=global_step, 
                                 train_loss=f"{avg_loss:.4f}", 
                                 best_train_loss=f"{self.logs['best_loss']:.4f}",
-                                val_loss=f"{self.logs['val_loss'][-1]:.4f}" if self.val_data is not None else 'N/A',
+                                val_loss=f"{self.logs['val_loss']:.4f}" if self.val_data != None else 'N/A',
                             )
-
                             if self.report_to_wandb:
                                 wandb.log(
                                     data={
                                         "train/train_loss": avg_loss,
                                         "train/best_train_loss": self.logs["best_loss"],
-                                        "validation/val_loss": self.logs["val_loss"][-1] if self.val_data is not None else None,
+                                        "validation/val_loss": self.logs["val_loss"],
                                         "train/global_step": global_step,
                                         "train/epoch": epoch,
                                         },
-                                    step=global_step
-                                )
+                                    )
 
-                        # Save model
-                        if self.save_steps is not None and global_step % self.save_steps == 0:
-                            self.save()
+                    if self.save_steps and global_step % self.save_steps == 0 and global_step != 0:
+                        self.save()
 
                     global_step += 1
-
-                    # Validation
-                    if global_step % self.validation_steps == 0 and self.val_data is not None:
-                        pbar.set_description(f"Validating")
-                        self.evaluate()
-                        self.model.train()
-                        pbar.set_description(f"Training | Step {global_step}")
-                  
                 pbar.update(1)
 
         if self.report_to_wandb:
@@ -244,7 +236,6 @@ class Trainer:
         if os.path.exists(checkpoint_path):
             model_file = os.path.join(checkpoint_path, "pytorch_model.pt")
             state_dict = torch.load(model_file)
-
             # Handle DDP/DP prefix if necessary
             if self.distributed_backend == "ddp" or self.distributed_backend == "dp":
                 state_dict = {f"module.{k}": v for k, v in state_dict.items()}
@@ -253,8 +244,8 @@ class Trainer:
             self.optimizer.load_state_dict(torch.load(os.path.join(checkpoint_path, "optimizer.pt")))
             self.scaler.load_state_dict(torch.load(os.path.join(checkpoint_path, "scaler.pt")))
             self.logs = torch.load(os.path.join(checkpoint_path, "logs.pt"))
-
             print(f"Model loaded from {checkpoint_path}")
+            self.train()
         else:
             raise ValueError(f"Checkpoint path {checkpoint_path} does not exist")
 
@@ -271,6 +262,8 @@ class Trainer:
 
     def evaluate(self) -> None:
         self.model.eval()
+        avg_loss = 0.0
+        data_length = 0
         for batch in self.val_data:
             with torch.no_grad():
                 with autocast(
@@ -279,7 +272,11 @@ class Trainer:
                     enabled=self.enable_amp
                     ):
                     loss = self.step(self.model, batch, self.device)
-                    self.logs["val_loss"].append(loss.item())
+                    avg_loss += loss.item()
+                    data_length += 1
+        avg_loss /= data_length
+        self.logs["val_loss"] = avg_loss
+
 
 
     def _created_dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
@@ -323,7 +320,7 @@ class Trainer:
         else:
             model_state_dict = self.model.state_dict()
 
-        current_loss = self.logs["train_loss"][-1]
+        current_loss = self.logs["train_loss"]
         if current_loss < self.logs["best_loss"]:
             self.logs["best_loss"] = current_loss
             torch.save(model_state_dict, f"{self.model_name}/pytorch_model.pt")  
