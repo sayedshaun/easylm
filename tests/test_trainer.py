@@ -91,6 +91,9 @@ def test_bert_trainer():
         logging_steps=1,
         save_steps=1,
         device="cpu",
+        early_stopping=5,
+        patience=2,
+        overwrite_output_dir=True
     )
     trainer = lt.trainer.Trainer(
         model=model, 
