@@ -78,6 +78,9 @@ class TrainingConfig:
     report_to_wandb: Union[bool, None] = None
     wandb_project: Union[str, None] = "easylm"
     distributed_backend: Union[str, None] = None
+    find_unused_parameters: bool = True
+    drop_dataloader_last: bool = False
+
 
 
 
