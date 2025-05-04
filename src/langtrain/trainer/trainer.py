@@ -1,4 +1,5 @@
 import os
+import math
 import shutil
 import yaml
 import torch
@@ -88,14 +89,24 @@ class Trainer:
                 eps=self.config.lr_epsilon
                 )
 
-        self.logs = {"epoch": 0, "global_step": 0, "train_loss": None,"val_loss": None,"best_loss": float("inf")}
+        self.logs = {
+            "epoch": 0, 
+            "global_step": 0, 
+            "train_loss": None,
+            "val_loss": None,
+            "best_train_loss": float("inf"),
+            "best_val_loss": float("inf"),
+            "train_perplexity": None,
+            "val_perplexity": None,
+            }
+        
         self.model.to(self.device)
 
         if self.config.report_to_wandb:
             wandb.init(project=self.config.wandb_project, name=self.model_name)
             wandb.watch(self.model, log="all", log_graph=False, log_freq=self.config.logging_steps)
 
-        self.save_config()
+        self._save_config()
 
         if self.config.distributed_backend == "ddp":
             self.model = self._trigger_ddp()
@@ -106,37 +117,55 @@ class Trainer:
         else:
             raise ValueError(f"Invalid distributed backend: {self.config.distributed_backend}, must be one of ['ddp', 'dp', None]")
 
-        self.train_data = self._created_dataloader(config.train_data)
-        self.val_data = self._created_dataloader(config.val_data)
-        self.test_data = self._created_dataloader(config.test_data)
+        self.train_data = self._create_train_dataloader(config.train_data)
+        self.val_data = self._create_val_dataloader(config.val_data)
+        self.test_data = self._create_test_dataloader(config.test_data)
     
+
     def _trigger_ddp(self) -> torch.nn.Module:
         """
-        This method will be trigger for DistributedDataParallel (DDP) training.
+        This method sets up DistributedDataParallel (DDP) training.
         """
-        self.rank = int(os.environ["RANK"])
-        self.world_size = int(os.environ["WORLD_SIZE"])
-        self.local_rank = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(self.local_rank)
-        self.device = torch.device(self.device.type, self.local_rank)
+        # Ensure required environment variables are set
+        try:
+            self.rank = int(os.environ["RANK"])
+            self.world_size = int(os.environ["WORLD_SIZE"])
+            self.local_rank = int(os.environ["LOCAL_RANK"])
+        except KeyError as e:
+            raise RuntimeError(f"Missing required environment variable for DDP: {e}")
+
+        # Set the local GPU device
+        if torch.cuda.is_available():
+            torch.cuda.set_device(self.local_rank)
+            self.device = torch.device("cuda", self.local_rank)
+        else:
+            raise RuntimeError("CUDA is not available for DDP training.")
+
+        # Initialize the process group
         torch.distributed.init_process_group(
-            backend="nccl",
+            backend="nccl",  # Default to NCCL
             init_method="env://"
         )
+
+        # Wrap the model in DistributedDataParallel
         self.model = torch.nn.parallel.DistributedDataParallel(
-            self.model, 
-            device_ids=[self.local_rank], 
+            self.model,
+            device_ids=[self.local_rank],
             output_device=self.local_rank,
-            find_unused_parameters=True
-            )
+            find_unused_parameters=self.config.find_unused_parameters
+        )
         return self.model
     
 
     def _trigger_dp(self) -> torch.nn.Module:
         """
-        This method will be trigger for DataParallel (DP) training.
+        This method sets up DataParallel (DP) training.
         """
+        # Check if GPUs are available
         device_count = torch.cuda.device_count()
+        if device_count < 1:
+            raise RuntimeError("No GPUs available for DataParallel training.")
+
         self.model = torch.nn.DataParallel(self.model, device_ids=list(range(device_count)))
         return self.model
 
@@ -170,7 +199,7 @@ class Trainer:
 
                         if global_step % self.config.validation_steps == 0 and self.val_data is not None and global_step != 0:
                             pbar.set_description(f"Validating")
-                            self.evaluate()
+                            self._evaluate()
                             self.model.train()
                             pbar.set_description(f"Training | Step {global_step}")
 
@@ -186,22 +215,31 @@ class Trainer:
                                 self.logs["train_loss"] = avg_loss
                                 self.logs["global_step"] = global_step
                                 self.logs["epoch"] = epoch
+                                self.logs["train_perplexity"] = math.exp(avg_loss)
+                                self.logs["val_perplexity"] = math.exp(self.logs["val_loss"]) if self.val_data != None else None
+                                self.logs["test_perplexity"] = math.exp(self.logs["test_loss"]) if self.test_data != None else None
+                                
+
                                 pbar.set_postfix(
                                     # step=global_step, 
                                     train_loss=f"{avg_loss:.4f}", 
-                                    best_train_loss=f"{self.logs['best_loss']:.4f}",
+                                    best_train_loss=f"{self.logs['best_train_loss']:.4f}",
                                     val_loss=f"{self.logs['val_loss']:.4f}" if self.val_data != None and self.logs['val_loss'] else 'N/A',
                                 )
                                 if self.config.report_to_wandb:
-                                    wandb.log(
-                                        data={
+                                    data_dict={
                                             "train/train_loss": avg_loss,
                                             "train/best_train_loss": self.logs["best_loss"],
-                                            "validation/val_loss": self.logs["val_loss"],
+                                            "train/train_perplexity": self.logs["train_perplexity"],
                                             "train/global_step": global_step,
                                             "train/epoch": epoch,
                                             }
-                                        )
+                                    if self.val_data is not None:
+                                        data_dict["validation/val_loss"] = self.logs["val_loss"]
+                                        data_dict["validation/val_perplexity"] = self.logs["val_perplexity"]
+
+                                    wandb.log(data_dict)
+                                        
                                 if self.config.early_stopping:
                                     should_stop, patience_counter = callback_fn(
                                         curr_value=avg_loss, 
@@ -214,18 +252,26 @@ class Trainer:
                                         break
 
                         if self.config.save_steps and global_step % self.config.save_steps == 0 and global_step != 0:
-                            self.save()
+                            self._save_checkpoints()
 
                         global_step += 1
                     pbar.update(1)
-
+            if self.test_data is not None:
+                out = self.predict(self.test_data, self.device)
+                if self.config.report_to_wandb:
+                    wandb.log(
+                        data={
+                            "test/test_loss": out["test_loss"],
+                            "test/test_perplexity": out["test_perplexity"]
+                        }
+                    )
+            if self.config.report_to_wandb:
+                wandb.finish()
         except KeyboardInterrupt:
             print("Training interrupted by user.")
         except Exception as e:
             raise e
         finally:
-            if self.config.report_to_wandb:
-                wandb.finish()
             if self.config.distributed_backend == "ddp":
                 torch.distributed.destroy_process_group()
 
@@ -247,18 +293,17 @@ class Trainer:
         else:
             raise ValueError(f"Checkpoint path {checkpoint_path} does not exist")
 
-
-    @staticmethod        
-    def step(model: torch.nn.Module, batch, device: Union[torch.device, str]) ->torch.FloatTensor:
+      
+    def step(self, model: torch.nn.Module, batch, device: Union[torch.device, str]) ->torch.FloatTensor:
         inputs, targets = batch
-        inputs = inputs.to(device)
-        targets = targets.to(device)
+        inputs = inputs.to(device, non_blocking=True)
+        targets = targets.to(device, non_blocking=True)
         outputs = model(inputs, targets)
         loss = outputs.loss
         return loss
 
 
-    def evaluate(self) -> None:
+    def _evaluate(self) -> None:
         self.model.eval()
         avg_loss = 0.0
         data_length = 0
@@ -276,17 +321,14 @@ class Trainer:
         self.logs["val_loss"] = avg_loss
 
 
-
-    def _created_dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
+    def _create_train_dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
         if dataset is None:
             return None
-        
         if isinstance(dataset, DataLoader):
             return dataset
 
         sampler = None
         shuffle = self.config.shuffle_data
-
         if self.config.distributed_backend == "ddp":
             if not torch.distributed.is_initialized():
                 raise RuntimeError("Distributed training is not initialized.")
@@ -299,7 +341,6 @@ class Trainer:
                 sampler = torch.utils.data.distributed.DistributedSampler(dataset)
                 shuffle = False  # Shuffling is handled by the sampler
 
-
         return torch.utils.data.DataLoader(
             dataset=dataset,
             batch_size=self.config.batch_size,
@@ -308,11 +349,31 @@ class Trainer:
             shuffle=shuffle,
             sampler=sampler,
             collate_fn=self.collate_fn,
-            drop_last=True,
+            drop_last=self.config.drop_dataloader_last,
         )
-        
+    
 
-    def save(self) -> None:
+    def _create_val_dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
+        if dataset is None:
+            return None
+        if isinstance(dataset, DataLoader):
+            return dataset
+        return torch.utils.data.DataLoader(
+            dataset=dataset,
+            batch_size=self.config.batch_size,
+            num_workers=self.config.num_workers,
+            pin_memory=self.config.pin_memory,
+            shuffle=False,
+            collate_fn=self.collate_fn,
+            drop_last=False,
+        )
+    
+
+    def _create_test_dataloader(self, dataset: Union[Any, DataLoader]) -> DataLoader:
+        return self._create_val_dataloader(dataset)
+
+
+    def _save_checkpoints(self) -> None:
         if self.config.distributed_backend == "ddp" or self.config.distributed_backend == "dp":
             model_state_dict = self.model.module.state_dict()
         else:
@@ -342,7 +403,7 @@ class Trainer:
                     shutil.rmtree(os.path.join(self.model_name, checkpoint))
 
 
-    def save_config(self) -> None:
+    def _save_config(self) -> None:
         # Save config in a yaml file
         trainer_config_dict = {}
         for key, value in asdict(self.config).items():
@@ -370,3 +431,19 @@ class Trainer:
             model_config_dict["architecture"] = str(self.model.__class__.__name__)
             wandb.config.update(trainer_config_dict)
         self.tokenizer.save(path=self.model_name)
+
+
+    def predict(self, dataset: Union[Any, DataLoader], device: Union[torch.device, str]) -> Any:
+        dataset = self._create_test_dataloader(dataset)
+        self.model.eval()
+        avg_loss = 0.0
+        data_length = 0
+        with torch.no_grad():
+            for batch in dataset:
+                outputs = self.step(self.model, batch, device)
+                loss = outputs.loss
+                avg_loss += loss.item()
+                data_length += 1
+        avg_loss /= data_length
+        perplexity = math.exp(avg_loss)
+        return {"test_loss": avg_loss, "test_perplexity": perplexity}
