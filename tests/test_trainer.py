@@ -23,6 +23,9 @@ def test_llama_trainer():
         logging_steps=1,
         save_steps=1,
         device="cpu",
+        monitor_loss_for="val",
+        early_stopping=True,
+        patience=1
     )
     trainer = lt.trainer.Trainer(
         model=model, 
@@ -57,6 +60,7 @@ def test_gpt_trainer():
         logging_steps=1,
         save_steps=1,
         device="cpu",
+        monitor_loss_for="val"
     )
     trainer = lt.trainer.Trainer(
         model=model, 
@@ -93,7 +97,8 @@ def test_bert_trainer():
         device="cpu",
         early_stopping=5,
         patience=2,
-        overwrite_output_dir=True
+        overwrite_output_dir=True,
+        monitor_loss_for="val"
     )
     trainer = lt.trainer.Trainer(
         model=model, 
