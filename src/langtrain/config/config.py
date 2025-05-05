@@ -51,17 +51,17 @@ class VITConfig:
 
 @dataclass
 class TrainingConfig:
-    epochs: Union[int, None] =  None
+    epochs: Union[int, None] =  1
     overwrite_output_dir: bool = False
-    batch_size: Union[int, None] = None
-    learning_rate: float = None
+    batch_size: Union[int, None] = 2
+    learning_rate: float = 1e-5
     weight_decay: float = 0
     lr_epsilon: float = 1e-8
     device: Union[str, torch.device, None] = None
     gradient_accumulation_steps: int = 1
     gradient_clipping: float = 1.0
     precision: str = "fp16"
-    seed: Union[int, None] = None
+    seed: Union[int, None] = 42
     validation_steps: Union[int, None] = 500
     logging_steps: Union[int, None] = 500
     save_steps: Union[int, None] = 500
