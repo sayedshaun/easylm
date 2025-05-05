@@ -92,12 +92,12 @@ class Trainer:
         self.logs = {
             "epoch": 0, 
             "global_step": 0, 
-            "train_loss": None,
-            "val_loss": None,
+            "train_loss": float("inf"),
+            "val_loss": float("inf"),
             "best_train_loss": float("inf"),
             "best_val_loss": float("inf"),
-            "train_perplexity": None,
-            "val_perplexity": None,
+            "train_perplexity": float("inf"),
+            "val_perplexity": float("inf"),
             }
         
         self.model.to(self.device)
@@ -120,7 +120,10 @@ class Trainer:
         self.train_data = self._create_train_dataloader(config.train_data)
         self.val_data = self._create_val_dataloader(config.val_data)
         self.test_data = self._create_test_dataloader(config.test_data)
-    
+
+        if self.config.monitor_loss_for == "val" and self.val_data is None:
+            warnings.warn("You set `monitor_loss_for=val` but no validation data was provided, defaulting to `monitor_loss_for=train`")
+            self.config.monitor_loss_for = "train"
 
     def _trigger_ddp(self) -> torch.nn.Module:
         """
@@ -219,23 +222,24 @@ class Trainer:
                                 self.logs["val_perplexity"] = math.exp(self.logs["val_loss"]) if self.val_data != None else None
                                 self.logs["test_perplexity"] = math.exp(self.logs["test_loss"]) if self.test_data != None else None
                                 
-
+                                best_loss = "best_" + self.config.monitor_loss_for + "_loss"
                                 pbar.set_postfix(
                                     # step=global_step, 
-                                    train_loss=f"{avg_loss:.4f}", 
-                                    best_train_loss=f"{self.logs['best_train_loss']:.4f}",
-                                    val_loss=f"{self.logs['val_loss']:.4f}" if self.val_data != None and self.logs['val_loss'] else 'N/A',
+                                    train_loss=f"{avg_loss:.2f}", 
+                                    **{f"best_{self.config.monitor_loss_for}_loss": f"{self.logs[best_loss]:.2f}"},
+                                    val_loss=f"{self.logs['val_loss']:.2f}" if self.val_data != None and self.logs['val_loss'] else None,
                                 )
                                 if self.config.report_to_wandb:
                                     data_dict={
                                             "train/train_loss": avg_loss,
-                                            "train/best_train_loss": self.logs["best_loss"],
+                                            "train/best_train_loss": self.logs["best_train_loss"],
                                             "train/train_perplexity": self.logs["train_perplexity"],
                                             "train/global_step": global_step,
                                             "train/epoch": epoch,
                                             }
                                     if self.val_data is not None:
                                         data_dict["validation/val_loss"] = self.logs["val_loss"]
+                                        data_dict["validation/best_val_loss"] = self.logs["best_val_loss"]
                                         data_dict["validation/val_perplexity"] = self.logs["val_perplexity"]
 
                                     wandb.log(data_dict)
@@ -243,7 +247,7 @@ class Trainer:
                                 if self.config.early_stopping:
                                     should_stop, patience_counter = callback_fn(
                                         curr_value=avg_loss, 
-                                        best_value=self.logs["best_loss"], 
+                                        best_value=self.logs["best_train_loss"], 
                                         patience_counter=patience_counter, 
                                         patience=self.config.patience
                                         )         
@@ -252,7 +256,7 @@ class Trainer:
                                         break
 
                         if self.config.save_steps and global_step % self.config.save_steps == 0 and global_step != 0:
-                            self._save_checkpoints()
+                            self._save_checkpoints(self.config.monitor_loss_for)
 
                         global_step += 1
                     pbar.update(1)
@@ -373,15 +377,16 @@ class Trainer:
         return self._create_val_dataloader(dataset)
 
 
-    def _save_checkpoints(self) -> None:
+    def _save_checkpoints(self, monitor_for:str) -> None:
         if self.config.distributed_backend == "ddp" or self.config.distributed_backend == "dp":
             model_state_dict = self.model.module.state_dict()
         else:
             model_state_dict = self.model.state_dict()
 
-        current_loss = self.logs["train_loss"]
-        if current_loss < self.logs["best_loss"]:
-            self.logs["best_loss"] = current_loss
+        current_loss = self.logs[monitor_for+"_loss"]
+        loss_to_monitor = "best_" + monitor_for + "_loss"
+        if current_loss < self.logs[loss_to_monitor]:
+            self.logs[loss_to_monitor] = current_loss
             torch.save(model_state_dict, f"{self.model_name}/pytorch_model.pt")  
 
             # Save all snapshots in the checkpoint directory
