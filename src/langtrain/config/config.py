@@ -80,6 +80,7 @@ class TrainingConfig:
     distributed_backend: Union[str, None] = None
     find_unused_parameters: bool = True
     drop_dataloader_last: bool = False
+    monitor_loss_for: str = "train_loss"
 
 
 
