@@ -51,16 +51,12 @@ class VITConfig:
 
 @dataclass
 class TrainingConfig:
-    model: Union[torch.nn.Module, None] = None
     epochs: Union[int, None] =  None
     overwrite_output_dir: bool = False
     batch_size: Union[int, None] = None
     learning_rate: float = None
     weight_decay: float = 0
     lr_epsilon: float = 1e-8
-    train_data: Union[DataLoader, Dataset, None] = None
-    val_data: Union[DataLoader, Dataset, None] = None
-    test_data: Union[DataLoader, Dataset, None] = None
     device: Union[str, torch.device, None] = None
     gradient_accumulation_steps: int = 1
     gradient_clipping: float = 1.0
@@ -76,8 +72,9 @@ class TrainingConfig:
     early_stopping: bool = False
     patience: int = 5
     report_to_wandb: Union[bool, None] = None
-    wandb_project: Union[str, None] = "easylm"
-    distributed_backend: Union[str, None] = None
+    wandb_project: Union[str, None] = "langtrain"
+    distributed_training: Union[str, None] = None
+    distributed_backend: str = "nccl"
     find_unused_parameters: bool = True
     drop_dataloader_last: bool = False
     monitor_loss_for: str = "train_loss"
