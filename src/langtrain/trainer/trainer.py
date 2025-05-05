@@ -28,6 +28,9 @@ class Trainer:
         model (torch.nn.Module): The model to be trained.
         config (TrainingConfig): Configuration object containing training parameters.
         tokenizer (Tokenizer): Tokenizer used for preprocessing text data.
+        train_data (Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None]): Training data.
+        val_data (Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None]): Validation data.
+        test_data (Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None]): Validation data.
         collate_fn (callable, optional): Custom collate function for DataLoader.
         model_name (str): Name of the model, used for saving and loading.        
     """
@@ -37,6 +40,9 @@ class Trainer:
         model: torch.nn.Module, 
         config: TrainingConfig,
         tokenizer: Tokenizer,
+        train_data: Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None] = None,
+        val_data: Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None] = None,
+        test_data: Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None] = None,
         optimizer: Union[torch.optim.Optimizer, None] = None, 
         model_name: str = "my_pretrained_model",
         collate_fn: Union[None, callable] = None) -> None:
@@ -108,18 +114,18 @@ class Trainer:
 
         self._save_config()
 
-        if self.config.distributed_backend == "ddp":
+        if self.config.distributed_training == "ddp":
             self.model = self._trigger_ddp()
-        elif self.config.distributed_backend == "dp":
+        elif self.config.distributed_training == "dp":
             self.model = self._trigger_dp()
-        elif self.config.distributed_backend is None:
+        elif self.config.distributed_training is None:
             pass
         else:
-            raise ValueError(f"Invalid distributed backend: {self.config.distributed_backend}, must be one of ['ddp', 'dp', None]")
+            raise ValueError(f"Invalid distributed backend: {self.config.distributed_training}, must be one of ['ddp', 'dp', None]")
 
-        self.train_data = self._create_train_dataloader(config.train_data)
-        self.val_data = self._create_val_dataloader(config.val_data)
-        self.test_data = self._create_test_dataloader(config.test_data)
+        self.train_data = self._create_train_dataloader(train_data)
+        self.val_data = self._create_val_dataloader(val_data)
+        self.test_data = self._create_test_dataloader(test_data)
 
         if self.config.monitor_loss_for == "val" and self.val_data is None:
             warnings.warn("You set `monitor_loss_for=val` but no validation data was provided, defaulting to `monitor_loss_for=train`")
@@ -129,7 +135,6 @@ class Trainer:
         """
         This method sets up DistributedDataParallel (DDP) training.
         """
-        # Ensure required environment variables are set
         try:
             self.rank = int(os.environ["RANK"])
             self.world_size = int(os.environ["WORLD_SIZE"])
@@ -137,20 +142,16 @@ class Trainer:
         except KeyError as e:
             raise RuntimeError(f"Missing required environment variable for DDP: {e}")
 
-        # Set the local GPU device
         if torch.cuda.is_available():
             torch.cuda.set_device(self.local_rank)
             self.device = torch.device("cuda", self.local_rank)
         else:
             raise RuntimeError("CUDA is not available for DDP training.")
 
-        # Initialize the process group
         torch.distributed.init_process_group(
-            backend="nccl",  # Default to NCCL
+            backend=self.config.distributed_backend,
             init_method="env://"
         )
-
-        # Wrap the model in DistributedDataParallel
         self.model = torch.nn.parallel.DistributedDataParallel(
             self.model,
             device_ids=[self.local_rank],
@@ -174,7 +175,7 @@ class Trainer:
 
 
     def train(self) -> None:
-        if self.config.distributed_backend == "ddp":
+        if self.config.distributed_training == "ddp":
             torch.distributed.barrier()
 
         self.model.train()
@@ -220,7 +221,6 @@ class Trainer:
                                 self.logs["epoch"] = epoch
                                 self.logs["train_perplexity"] = math.exp(avg_loss)
                                 self.logs["val_perplexity"] = math.exp(self.logs["val_loss"]) if self.val_data != None else None
-                                self.logs["test_perplexity"] = math.exp(self.logs["test_loss"]) if self.test_data != None else None
                                 
                                 best_loss = "best_" + self.config.monitor_loss_for + "_loss"
                                 pbar.set_postfix(
@@ -276,7 +276,7 @@ class Trainer:
         except Exception as e:
             raise e
         finally:
-            if self.config.distributed_backend == "ddp":
+            if self.config.distributed_training == "ddp":
                 torch.distributed.destroy_process_group()
 
     
@@ -285,7 +285,7 @@ class Trainer:
             model_file = os.path.join(checkpoint_path, "pytorch_model.pt")
             state_dict = torch.load(model_file)
             # Handle DDP/DP prefix if necessary
-            if self.config.distributed_backend == "ddp" or self.config.distributed_backend == "dp":
+            if self.config.distributed_training == "ddp" or self.config.distributed_training == "dp":
                 state_dict = {f"module.{k}": v for k, v in state_dict.items()}
 
             self.model.load_state_dict(state_dict)  # Load the model state dict
@@ -333,7 +333,7 @@ class Trainer:
 
         sampler = None
         shuffle = self.config.shuffle_data
-        if self.config.distributed_backend == "ddp":
+        if self.config.distributed_training == "ddp":
             if not torch.distributed.is_initialized():
                 raise RuntimeError("Distributed training is not initialized.")
             
@@ -378,7 +378,7 @@ class Trainer:
 
 
     def _save_checkpoints(self, monitor_for:str) -> None:
-        if self.config.distributed_backend == "ddp" or self.config.distributed_backend == "dp":
+        if self.config.distributed_training == "ddp" or self.config.distributed_training == "dp":
             model_state_dict = self.model.module.state_dict()
         else:
             model_state_dict = self.model.state_dict()
@@ -446,9 +446,10 @@ class Trainer:
         with torch.no_grad():
             for batch in dataset:
                 outputs = self.step(self.model, batch, device)
-                loss = outputs.loss
+                loss = outputs
                 avg_loss += loss.item()
                 data_length += 1
         avg_loss /= data_length
         perplexity = math.exp(avg_loss)
+        print(f"Test Loss: {avg_loss}, Test Perplexity: {perplexity}")
         return {"test_loss": avg_loss, "test_perplexity": perplexity}
