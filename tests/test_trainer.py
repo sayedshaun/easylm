@@ -15,8 +15,6 @@ def test_llama_trainer():
         )
     )
     train_config = lt.config.TrainingConfig(
-        train_data=dataset,
-        val_data=dataset,
         epochs=1,
         batch_size=2,
         learning_rate=1e-3,
@@ -30,6 +28,9 @@ def test_llama_trainer():
     trainer = lt.trainer.Trainer(
         model=model, 
         tokenizer=tokenizer,
+        train_data=dataset,
+        val_data=dataset,
+        test_data=dataset,
         model_name="tests/test_weights", 
         config=train_config)
     assert trainer is not None
@@ -52,8 +53,6 @@ def test_gpt_trainer():
         )
     )
     train_config = lt.config.TrainingConfig(
-        train_data=dataset,
-        val_data=dataset,
         epochs=1,
         batch_size=2,
         learning_rate=1e-3,
@@ -65,12 +64,17 @@ def test_gpt_trainer():
     trainer = lt.trainer.Trainer(
         model=model, 
         tokenizer=tokenizer,
+        train_data=dataset,
+        val_data=dataset,
+        test_data=dataset,
         model_name="tests/test_weights", 
         config=train_config)
     assert trainer is not None
     assert trainer.model is not None
     assert trainer.tokenizer is not None
     trainer.train()
+    trainer.predict(dataset, train_config.device)
+
 
 def test_bert_trainer():
     tokenizer = lt.tokenizer.SentencePieceTokenizer(dir_or_path="tests/data", vocab_size=50, retrain=True)
@@ -87,8 +91,6 @@ def test_bert_trainer():
         )
     )
     train_config = lt.config.TrainingConfig(
-        train_data=dataset,
-        #val_data=dataset,
         epochs=1,
         batch_size=2,
         learning_rate=1e-3,
@@ -98,11 +100,14 @@ def test_bert_trainer():
         early_stopping=5,
         patience=2,
         overwrite_output_dir=True,
-        monitor_loss_for="val"
+        monitor_loss_for="val",
     )
     trainer = lt.trainer.Trainer(
         model=model, 
         tokenizer=tokenizer,
+        train_data=dataset,
+        # val_data=dataset,
+        test_data=dataset,
         model_name="tests/test_weights", 
         config=train_config)
     assert trainer is not None
