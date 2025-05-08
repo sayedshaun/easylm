@@ -33,19 +33,28 @@ dataset = lt.dataset.SimpleCausalDataset(data_path, tokenizer, n_ctx=512)
 model = lt.model.LlamaModel(
     lt.model.LlamaConfig(
         vocab_size=tokenizer.vocab_size,
-        ...
+        hidden_size=512,
+        hidden_layers=8,
+        num_heads=8,
+        dropout=0.2,
+        norm_epsilon=1e-6,
+        max_seq_len=dataset.n_ctx,
     )
 )
 train_config=lt.config.TrainingConfig(
-    train_data=dataset,
-    ...
+    epochs=5,
+    batch_size=4,
+    learning_rate=1e-4,
+    device="cuda",
+    precision="fp16",
 )
 trainer = lt.trainer.Trainer(
     model=model,
+    train_config=train_config,
+    dataset=dataset,
     tokenizer=tokenizer,
-    model_name="nano-llama",
     collate_fn=lt.utils.collate_fn,
-    config=train_config
+    model_name="nano-llama",
 )
 trainer.train()
 ```
