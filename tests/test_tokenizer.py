@@ -18,10 +18,3 @@ def test_tokenizer_save_and_load():
     tokenizer.save("tests/pretrained_model")
     loaded_tokenizer = SentencePieceTokenizer.from_pretrained("tests/pretrained_model")
     assert loaded_tokenizer.mask_token_id == tokenizer.mask_token_id
-
-
-if __name__ == "__main__":
-    test_tokenizer_initialization()
-    test_tokenizer_encode_decode()
-    test_tokenizer_save_and_load()
-    print("All tests passed!")
