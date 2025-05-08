@@ -23,7 +23,8 @@ def test_llama_trainer():
         device="cpu",
         monitor_loss_for="val",
         early_stopping=True,
-        patience=1
+        patience=1,
+        overwrite_output_dir=True
     )
     trainer = lt.trainer.Trainer(
         model=model, 
@@ -37,6 +38,8 @@ def test_llama_trainer():
     assert trainer.model is not None
     assert trainer.tokenizer is not None
     trainer.train()
+    model.from_pretrained("tests/test_weights")
+    trainer.predict(dataset, train_config.device)
 
 def test_gpt_trainer():
     tokenizer = lt.tokenizer.SentencePieceTokenizer(dir_or_path="tests/data", vocab_size=50, retrain=True)
@@ -59,7 +62,8 @@ def test_gpt_trainer():
         logging_steps=1,
         save_steps=1,
         device="cpu",
-        monitor_loss_for="val"
+        monitor_loss_for="val",
+        overwrite_output_dir=True
     )
     trainer = lt.trainer.Trainer(
         model=model, 
@@ -73,6 +77,7 @@ def test_gpt_trainer():
     assert trainer.model is not None
     assert trainer.tokenizer is not None
     trainer.train()
+    model.from_pretrained("tests/test_weights")
     trainer.predict(dataset, train_config.device)
 
 
@@ -114,3 +119,8 @@ def test_bert_trainer():
     assert trainer.model is not None
     assert trainer.tokenizer is not None
     trainer.train()
+    model.from_pretrained("tests/test_weights")
+    trainer.predict(dataset, train_config.device)
+
+
+
