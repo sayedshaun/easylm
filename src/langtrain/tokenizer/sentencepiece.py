@@ -1,4 +1,5 @@
 import os
+import yaml
 import shutil
 import warnings
 import torch
@@ -85,13 +86,13 @@ class SentencePieceTokenizer(TextLoader, Tokenizer):
 
         # Load the SentencePiece model.
         self.processor = SentencePieceProcessor(model_file=self._model_path)
-        self.mask_token_id = self.encode(SentencePieceTokenizer.mask_token)
-        self.cls_token_id = self.encode(SentencePieceTokenizer.cls_token)
-        self.sep_token_id = self.encode(SentencePieceTokenizer.sep_token)
-        self.pad_token_id = self.encode(SentencePieceTokenizer.pad_token)
-        self.unk_token_id = self.encode(SentencePieceTokenizer.unk_token)
-        self.sos_token_id = self.encode(SentencePieceTokenizer.sos_token)
-        self.eos_token_id = self.encode(SentencePieceTokenizer.cls_token) 
+        self.mask_token_id = self.processor.piece_to_id(SentencePieceTokenizer.mask_token)
+        self.cls_token_id = self.processor.piece_to_id(SentencePieceTokenizer.cls_token)
+        self.sep_token_id = self.processor.piece_to_id(SentencePieceTokenizer.sep_token)
+        self.pad_token_id = self.processor.piece_to_id(SentencePieceTokenizer.pad_token)
+        self.unk_token_id = self.processor.piece_to_id(SentencePieceTokenizer.unk_token)
+        self.sos_token_id = self.processor.piece_to_id(SentencePieceTokenizer.sos_token)
+        self.eos_token_id = self.processor.piece_to_id(SentencePieceTokenizer.cls_token) 
 
     def _train_model(self) -> None:
         spm.SentencePieceTrainer.Train(
@@ -120,6 +121,21 @@ class SentencePieceTokenizer(TextLoader, Tokenizer):
     
     def save(self, path: str) -> None:
         os.makedirs(path, exist_ok=True)
+        with open(os.path.join(path, "tokenizer_config.yaml"), "w") as f:
+            yaml.dump(
+                {
+                    "name": str(self.__class__.__name__),
+                    "model_type": self.model_type,
+                    "vocab_size": self.vocab_size,
+                    "sos_token": SentencePieceTokenizer.sos_token,
+                    "eos_token": SentencePieceTokenizer.eos_token,
+                    "pad_token": SentencePieceTokenizer.pad_token,
+                    "unk_token": SentencePieceTokenizer.unk_token,
+                    "sep_token": SentencePieceTokenizer.sep_token,
+                    "cls_token": SentencePieceTokenizer.cls_token,
+                    "mask_token": SentencePieceTokenizer.mask_token,
+                }, f
+            )
         shutil.copy(self._model_path, path)
         shutil.copy(self._vocab_path, path)
 
@@ -150,12 +166,12 @@ class SentencePieceTokenizer(TextLoader, Tokenizer):
         tokenizer.processor = SentencePieceProcessor(model_file=model_path)
         
         # Setup token ids.
-        tokenizer.mask_token_id = tokenizer.encode(SentencePieceTokenizer.mask_token)
-        tokenizer.cls_token_id = tokenizer.encode(SentencePieceTokenizer.cls_token)
-        tokenizer.sep_token_id = tokenizer.encode(SentencePieceTokenizer.sep_token)
-        tokenizer.pad_token_id = tokenizer.encode(SentencePieceTokenizer.pad_token)
-        tokenizer.unk_token_id = tokenizer.encode(SentencePieceTokenizer.unk_token)
-        tokenizer.sos_token_id = tokenizer.encode(SentencePieceTokenizer.sos_token)
-        tokenizer.eos_token_id = tokenizer.encode(SentencePieceTokenizer.eos_token)
+        tokenizer.mask_token_id = tokenizer.processor.piece_to_id(SentencePieceTokenizer.mask_token)
+        tokenizer.cls_token_id = tokenizer.processor.piece_to_id(SentencePieceTokenizer.cls_token)
+        tokenizer.sep_token_id = tokenizer.processor.piece_to_id(SentencePieceTokenizer.sep_token)
+        tokenizer.pad_token_id = tokenizer.processor.piece_to_id(SentencePieceTokenizer.pad_token)
+        tokenizer.unk_token_id = tokenizer.processor.piece_to_id(SentencePieceTokenizer.unk_token)
+        tokenizer.sos_token_id = tokenizer.processor.piece_to_id(SentencePieceTokenizer.sos_token)
+        tokenizer.eos_token_id = tokenizer.processor.piece_to_id(SentencePieceTokenizer.eos_token)
         
         return tokenizer
