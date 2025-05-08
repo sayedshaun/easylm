@@ -44,14 +44,14 @@ class Trainer:
         val_data: Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None] = None,
         test_data: Union[DataLoader, torch.utils.data.Dataset, torch.utils.data.IterableDataset, None] = None,
         optimizer: Union[torch.optim.Optimizer, None] = None, 
-        model_name: str = "my_pretrained_model",
+        model_name: str = None,
         collate_fn: Union[None, callable] = None) -> None:
 
         self.config = config
         self.model = model
         self.optimizer = optimizer
         self.tokenizer = tokenizer
-        self.model_name = model_name
+        self.model_name = self.model.__class__.__name__ if model_name is None else model_name
         self.collate_fn = collate_fn
 
         self.device = config.device if isinstance(config.device, torch.device) else torch.device(str(config.device))
@@ -382,12 +382,14 @@ class Trainer:
             model_state_dict = self.model.module.state_dict()
         else:
             model_state_dict = self.model.state_dict()
+        
+        torch.save(model_state_dict, os.path.join(self.model_name, "pytorch_model.pt"))
 
-        current_loss = self.logs[monitor_for+"_loss"]
+        current_loss = self.logs[monitor_for + "_loss"]
         loss_to_monitor = "best_" + monitor_for + "_loss"
         if current_loss < self.logs[loss_to_monitor]:
             self.logs[loss_to_monitor] = current_loss
-            torch.save(model_state_dict, f"{self.model_name}/pytorch_model.pt")  
+            torch.save(model_state_dict, os.path.join(self.model_name, "pytorch_model.pt"))  
 
             # Save all snapshots in the checkpoint directory
             ckpt_dir = os.path.join(self.model_name, f"checkpoint-{self.logs['global_step']}")
@@ -419,7 +421,7 @@ class Trainer:
             elif value is None:
                 trainer_config_dict[key] = "None"
         
-        with open(f"{self.model_name}/trainer_config.yaml", "w") as f:
+        with open(os.path.join(self.model_name, "trainer_config.yaml"), "w") as f:
             yaml.dump(trainer_config_dict, f)
 
         model_config_dict = {}
@@ -429,11 +431,10 @@ class Trainer:
             elif value is None:
                 model_config_dict[key] = "None"
 
-        with open(f"{self.model_name}/model_config.yaml", "w") as f:
+        with open(os.path.join(self.model_name, "model_config.yaml"), "w") as f:
             yaml.dump(model_config_dict, f)
+            
         if self.config.report_to_wandb:
-            trainer_config_dict["model"] = model_config_dict
-            model_config_dict["architecture"] = str(self.model.__class__.__name__)
             wandb.config.update(trainer_config_dict)
         self.tokenizer.save(path=self.model_name)
 
